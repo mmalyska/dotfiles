@@ -18,6 +18,5 @@
 	gpgsign = true
 [gpg "ssh"]
 	{{ if eq .chezmoi.os "windows" -}}
-    	program = C:/Windows/System32/OpenSSH/ssh-keygen.exe
-    	{{- end }}
-	
+	program = C:/Windows/System32/OpenSSH/ssh-keygen.exe
+	{{- end }}
