@@ -1,0 +1,9 @@
+{{- $email_git := promptStringOnce . "email" "Email address for git" "999598+mmalyska@users.noreply.github.com" -}}
+{{- $user_git := promptStringOnce . "user" "User name for git" "Michał Małyska" -}}
+
+{{ $isWSL := (.chezmoi.kernel.osrelease | lower | contains "microsoft") -}}
+
+[data]
+    email_git = {{ $email_git | quote }}
+    user_git = {{ $user_git | quote }}
+    is_wsl: {{ $isWSL }}
