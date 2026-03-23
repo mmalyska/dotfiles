@@ -8,7 +8,9 @@ brew install PeonPing/tap/peon-ping && peon-ping-setup --packs=peon
 
 {{ if eq .chezmoi.os "darwin" -}}
 # Darwin-specific setup
+brew install ghostty
 {{ if .is_work -}}
+brew install slack
 export HOMEBREW_GITHUB_API_TOKEN=$(gh auth token)
 brew tap docplanner/team-cli https://github.com/DocPlanner/team-cli.git
 brew tap docplanner/dp-platform-setup https://github.com/DocPlanner/dp-platform-setup.git
@@ -24,3 +26,4 @@ brew install dp-platform-setup
 # WSL-specific setup
 {{ end -}}
 {{ end -}}
+
