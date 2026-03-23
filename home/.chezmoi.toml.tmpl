@@ -1,5 +1,6 @@
 {{- $email := promptStringOnce . "email" "Email address for git" "999598+mmalyska@users.noreply.github.com" -}}
 {{- $user := promptStringOnce . "user" "User name for git" "Michał Małyska" -}}
+{{- $isWork := promptBoolOnce . "isWork" "If work machine" false -}}
 {{- $isWSL := false -}}
 
 {{ if eq .chezmoi.os "linux" }}
@@ -12,3 +13,4 @@
     email = {{ $email | quote }}
     user = {{ $user | quote }}
     is_wsl = {{ $isWSL }}
+    is_work = {{ $isWork }}

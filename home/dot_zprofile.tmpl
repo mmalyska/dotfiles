@@ -1,0 +1,10 @@
+{{ if eq .chezmoi.os "darwin" -}}
+eval "$(/opt/homebrew/bin/brew shellenv)"
+
+# Added by Toolbox App
+export PATH="$PATH:/Users/mmalyska/Library/Application Support/JetBrains/Toolbox/scripts"
+
+# Dodaj narzędzia zestawu platformy .NET Core
+export PATH="$PATH:/Users/mmalyska/.dotnet/tools"
+export SSH_AUTH_SOCK=/Users/mmalyska/Library/Containers/com.bitwarden.desktop/Data/.bitwarden-ssh-agent.sock
+{{ end -}}
