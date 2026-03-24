@@ -5,6 +5,7 @@
     "MAX_THINKING_TOKENS": "10000",
     "CLAUDE_AUTOCOMPACT_PCT_OVERRIDE": "50"
   },
+  "includeCoAuthoredBy": false,
   "permissions": {
     "allow": [
       {{ if .is_work -}}
@@ -147,7 +148,7 @@
   },
   "statusLine": {
     "type": "command",
-    "command": "npx -y ccstatusline@latest",
+    "command": "npx -y ccstatusline@latest --config ~/.claude/statusline/settings.json",
     "padding": 0
   },
   "enabledPlugins": {
