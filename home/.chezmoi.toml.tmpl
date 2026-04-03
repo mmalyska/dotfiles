@@ -21,7 +21,3 @@
         "-c",
         "cp {{ "{{" }} .Target | quote {{ "}}" }} {{ "{{" }} .Target | quote {{ "}}" }}.base && code --new-window --wait --merge {{ "{{" }} .Destination | quote {{ "}}" }} {{ "{{" }} .Target | quote {{ "}}" }} {{ "{{" }} .Target | quote {{ "}}" }}.base {{ "{{" }} .Source | quote {{ "}}" }}",
     ]
-
-[diff]
-    command = "code"
-    args = ["--wait", "--diff"]

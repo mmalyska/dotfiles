@@ -8,3 +8,6 @@ export PATH="$PATH:/Users/mmalyska/Library/Application Support/JetBrains/Toolbox
 export PATH="$PATH:/Users/mmalyska/.dotnet/tools"
 export SSH_AUTH_SOCK=/Users/mmalyska/Library/Containers/com.bitwarden.desktop/Data/.bitwarden-ssh-agent.sock
 {{ end -}}
+
+# aws warmup: sso login + ecr docker auth                                                                                                  
+alias aws-warmup='aws sso login --profile global && aws ecr get-login-password --region eu-north-1 | docker login --username AWS --password-stdin 041193065457.dkr.ecr.eu-north-1.amazonaws.com'

@@ -1,9 +1,8 @@
 {
-  "model": "sonnet",
   "env": {
     "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1",
     "MAX_THINKING_TOKENS": "10000",
-    "CLAUDE_AUTOCOMPACT_PCT_OVERRIDE": "50"
+    "CLAUDE_AUTOCOMPACT_PCT_OVERRIDE": "70"
   },
   "includeCoAuthoredBy": false,
   "permissions": {
@@ -13,6 +12,7 @@
       {{- end }}
     ]
   },
+  "model": "sonnet",
   "hooks": {
     "SessionStart": [
       {
@@ -152,11 +152,12 @@
     "padding": 0
   },
   "enabledPlugins": {
-    "superpowers@claude-plugins-official": false,
-    "code-simplifier@claude-plugins-official": false,
+    "superpowers@claude-plugins-official": true,
+    "code-simplifier@claude-plugins-official": true,
     "context7@claude-plugins-official": true,
-    "claude-md-management@claude-plugins-official": false,
-    "everything-claude-code@everything-claude-code": true
+    "claude-md-management@claude-plugins-official": true,
+    "everything-claude-code@everything-claude-code": false,
+    "remember@claude-plugins-official": true
   },
   "extraKnownMarketplaces": {
     "everything-claude-code": {
