@@ -1,0 +1,6 @@
+{{- if ne .chezmoi.os "windows" }}
+.chezmoiscripts/ps/* # only manage ps on windows
+{{- else }}
+.chezmoiscripts/bash/*
+.zprofile
+{{- end }}
