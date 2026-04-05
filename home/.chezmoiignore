@@ -4,7 +4,7 @@
 .chezmoiscripts/bash/*
 .zprofile
 {{- end }}
-{{- if .is_devcontainer }}
+{{- if dig "is_devcontainer" false . }}
 .gitconfig
 .chezmoiscripts/bash/*
 {{- end }}
