@@ -1,5 +1,8 @@
 {{- if ne .chezmoi.os "windows" }}
 .chezmoiscripts/ps/* # only manage ps on windows
+{{ if eq .is_wsl }}
+.gitconfig
+{{- end }}
 {{- else }}
 .chezmoiscripts/bash/*
 .zprofile
