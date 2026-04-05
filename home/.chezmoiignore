@@ -1,9 +1,9 @@
 {{- if ne .chezmoi.os "windows" }}
 .chezmoiscripts/ps/*
-{{- if .is_devcontainer }}
-.gitconfig
-{{- end }}
 {{- else }}
 .chezmoiscripts/bash/*
 .zprofile
+{{- end }}
+{{- if .is_devcontainer }}
+.gitconfig
 {{- end }}
