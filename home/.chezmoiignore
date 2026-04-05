@@ -1,6 +1,6 @@
 {{- if ne .chezmoi.os "windows" }}
 .chezmoiscripts/ps/* # only manage ps on windows
-{{- if ne .is_devcontainer }}
+{{- if .is_devcontainer }}
 .gitconfig
 {{- end }}
 {{- else }}
