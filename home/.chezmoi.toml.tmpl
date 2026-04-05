@@ -2,7 +2,7 @@
 {{- $user := promptStringOnce . "user" "User name for git" "Michał Małyska" -}}
 {{- $isWork := promptBoolOnce . "isWork" "If work machine" false -}}
 {{- $isWSL := false -}}
-{{ $isDevContainer := eq .chezmoi.username "vscode" -}}
+{{- $isDevContainer := eq .chezmoi.username "vscode" -}}
 
 {{ if eq .chezmoi.os "linux" }}
 {{ if (.chezmoi.kernel.osrelease | lower | contains "microsoft") }}
