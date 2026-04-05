@@ -1,0 +1,28 @@
+# This script is intended to be run on every change to the chezmoi configuration, and should be used for tasks that need to be performed on every change, such as installing packages or running setup scripts.
+
+# Common setup
+brew update
+brew install claude-code visual-studio-code gh
+brew install PeonPing/tap/peon-ping && peon-ping-setup --packs=peon
+
+{{ if eq .chezmoi.os "darwin" -}}
+# Darwin-specific setup
+brew install ghostty
+{{ if .is_work -}}
+brew install slack
+export HOMEBREW_GITHUB_API_TOKEN=$(gh auth token)
+brew tap docplanner/team-cli https://github.com/DocPlanner/team-cli.git
+brew tap docplanner/dp-platform-setup https://github.com/DocPlanner/dp-platform-setup.git
+brew install dp-platform-setup
+{{ end -}}
+{{ end -}}
+{{ if eq .chezmoi.os "windows" -}}
+# Windows-specific setup
+{{ end -}}
+{{ if eq .chezmoi.os "linux" -}}
+# Linux-specific setup
+{{ if .is_wsl -}}
+# WSL-specific setup
+{{ end -}}
+{{ end -}}
+
