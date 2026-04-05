@@ -6,4 +6,5 @@
 {{- end }}
 {{- if .is_devcontainer }}
 .gitconfig
+.chezmoiscripts/bash/*
 {{- end }}

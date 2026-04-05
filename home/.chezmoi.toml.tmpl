@@ -2,13 +2,11 @@
 {{- $user := promptStringOnce . "user" "User name for git" "Michał Małyska" -}}
 {{- $isWork := promptBoolOnce . "isWork" "If work machine" false -}}
 {{- $isWSL := false -}}
-{{- $isDevContainer := (eq .chezmoi.username "vscode") -}}
+{{- $isDevContainer := or (eq .chezmoi.username "vscode") (ne (env "REMOTE_CONTAINERS") "") (ne (env "CODESPACES") "") (ne (env "DEVCONTAINER") "") -}}
 
-{{ if eq .chezmoi.os "linux" }}
-{{ if (.chezmoi.kernel.osrelease | lower | contains "microsoft") }}
-    {{ $isWSL := (.chezmoi.kernel.osrelease | lower | contains "microsoft") -}}
-{{ end }}
-{{ end }}
+{{- if and (eq .chezmoi.os "linux") (.chezmoi.kernel.osrelease | lower | contains "microsoft") -}}
+    {{- $isWSL = true -}}
+{{- end -}}
 
 [data]
     email = {{ $email | quote }}

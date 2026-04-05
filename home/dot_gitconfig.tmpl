@@ -9,7 +9,7 @@
 	signingkey = ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHhoXNF9/VXWVZiH92yUIXTYOLNe1zaKiD/Yuyh3vgIn
 [core]
 	editor = \"code\" --wait
-	{{ if eq .chezmoi.os "windows" -}}
+	{{- if eq .chezmoi.os "windows" }}
 	sshCommand = C:/Windows/System32/OpenSSH/ssh.exe
 	{{- end }}
 [gpg]
@@ -17,7 +17,7 @@
 [commit]
 	gpgsign = true
 [gpg "ssh"]
-	{{ if eq .chezmoi.os "windows" -}}
+	{{- if eq .chezmoi.os "windows" }}
 	program = C:/Windows/System32/OpenSSH/ssh-keygen.exe
 	{{- end }}
 [pull]
