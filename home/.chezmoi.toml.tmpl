@@ -9,7 +9,7 @@
     {{ $isWSL := (.chezmoi.kernel.osrelease | lower | contains "microsoft") -}}
 {{ end }}
 {{ if eq .chezmoi.username "vscode" }}
-{{ $isDevContainer := (eq .chezmoi.username "vscode") -}}
+{{ $isDevContainer := eq .chezmoi.username "vscode" -}}
 {{ end }}
 {{ end }}
 
