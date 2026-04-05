@@ -5,11 +5,11 @@
 {{- $isDevContainer := false -}}
 
 {{ if eq .chezmoi.os "linux" }}
-{{   if (.chezmoi.kernel.osrelease | lower | contains "microsoft") }}
+{{ if (.chezmoi.kernel.osrelease | lower | contains "microsoft") }}
     {{ $isWSL := (.chezmoi.kernel.osrelease | lower | contains "microsoft") -}}
-{{   end }}
+{{ end }}
 {{ if eq .chezmoi.username "vscode" }}
-{{ $isDevContainer := eq .chezmoi.username "vscode" -}}
+{{ $isDevContainer := (eq .chezmoi.username "vscode") -}}
 {{ end }}
 {{ end }}
 
