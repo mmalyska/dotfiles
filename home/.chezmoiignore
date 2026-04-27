@@ -1,10 +1,18 @@
-{{- if ne .chezmoi.os "windows" }}
-.chezmoiscripts/ps/*
-{{- else }}
-.chezmoiscripts/bash/*
+{{- if eq .chezmoi.os "windows" }}
+.chezmoiscripts/linux/*
+.chezmoiscripts/macos/*
 .zprofile
+{{- else if eq .chezmoi.os "linux" }}
+.chezmoiscripts/windows/*
+.chezmoiscripts/macos/*
+.zprofile
+{{- else if eq .chezmoi.os "darwin" }}
+.chezmoiscripts/windows/*
+.chezmoiscripts/linux/*
 {{- end }}
-{{- if dig "is_devcontainer" false . }}
+{{- if .is_devcontainer }}
 .gitconfig
-.chezmoiscripts/bash/*
+.chezmoiscripts/linux/*
+.chezmoiscripts/macos/*
+.chezmoiscripts/windows/*
 {{- end }}

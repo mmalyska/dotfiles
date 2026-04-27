@@ -1,0 +1,23 @@
+#!/bin/bash
+# macOS package installs via Homebrew.
+# Reruns whenever this file changes (run_onchange_).
+# Needs .tmpl for {{ .is_work }} conditional.
+set -euo pipefail
+
+brew update
+
+# Common
+brew install claude-code visual-studio-code gh ghostty
+brew install PeonPing/tap/peon-ping && peon-ping-setup --packs=peon
+
+# JetBrains Toolbox
+brew install --cask jetbrains-toolbox
+
+{{ if .is_work -}}
+# Work-specific
+brew install slack
+export HOMEBREW_GITHUB_API_TOKEN=$(gh auth token)
+brew tap docplanner/team-cli https://github.com/DocPlanner/team-cli.git
+brew tap docplanner/dp-platform-setup https://github.com/DocPlanner/dp-platform-setup.git
+brew install dp-platform-setup
+{{ end -}}

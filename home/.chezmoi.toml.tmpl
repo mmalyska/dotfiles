@@ -1,18 +1,29 @@
 {{- $email := promptStringOnce . "email" "Email address for git" "999598+mmalyska@users.noreply.github.com" -}}
 {{- $user := promptStringOnce . "user" "User name for git" "Michał Małyska" -}}
 {{- $isWork := promptBoolOnce . "isWork" "If work machine" false -}}
+
 {{- $isWSL := false -}}
+{{- $isArch := false -}}
 {{- $isDevContainer := or (eq .chezmoi.username "vscode") (ne (env "REMOTE_CONTAINERS") "") (ne (env "CODESPACES") "") (ne (env "DEVCONTAINER") "") -}}
 
 {{- if and (eq .chezmoi.os "linux") (.chezmoi.kernel.osrelease | lower | contains "microsoft") -}}
     {{- $isWSL = true -}}
 {{- end -}}
 
+{{- if eq .chezmoi.os "linux" -}}
+    {{- $osId     := get .chezmoi.osRelease "id"      | default "" -}}
+    {{- $osIdLike := get .chezmoi.osRelease "id_like" | default "" -}}
+    {{- if or (eq $osId "arch") (eq $osId "cachyos") (contains "arch" $osIdLike) -}}
+        {{- $isArch = true -}}
+    {{- end -}}
+{{- end -}}
+
 [data]
-    email = {{ $email | quote }}
-    user = {{ $user | quote }}
-    is_wsl = {{ $isWSL }}
-    is_work = {{ $isWork }}
+    email         = {{ $email | quote }}
+    user          = {{ $user  | quote }}
+    is_wsl        = {{ $isWSL }}
+    is_arch       = {{ $isArch }}
+    is_work       = {{ $isWork }}
     is_devcontainer = {{ $isDevContainer }}
 
 [merge]
