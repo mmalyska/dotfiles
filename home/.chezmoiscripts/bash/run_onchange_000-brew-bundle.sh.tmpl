@@ -17,9 +17,6 @@ brew tap docplanner/dp-platform-setup https://github.com/DocPlanner/dp-platform-
 brew install dp-platform-setup
 {{ end -}}
 {{ end -}}
-{{ if eq .chezmoi.os "windows" -}}
-# Windows-specific setup
-{{ end -}}
 {{ if eq .chezmoi.os "linux" -}}
 # Linux-specific setup
 {{ if .is_wsl -}}
