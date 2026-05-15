@@ -1,7 +1,8 @@
 #!/bin/bash
 set -euo pipefail
 
-claude plugin marketplace add mmalyska/claude-plugins
+claude plugin marketplace add mmalyska/claude-plugins || true
+claude plugin marketplace update mmalyska-claude-plugins
 claude plugin install personal-essentials@mmalyska-claude-plugins
 claude plugin install git-workflows@mmalyska-claude-plugins
 claude plugin install development-lifecycle@mmalyska-claude-plugins
