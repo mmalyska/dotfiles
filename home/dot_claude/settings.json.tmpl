@@ -1,19 +1,9 @@
 {
-  {{ if .is_work -}}
-  "env": {
-    "CLAUDE_CODE_USE_BEDROCK": "1",
-    "ANTHROPIC_MODEL": "eu.anthropic.claude-opus-4-6-v1",
-    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1",
-    "MAX_THINKING_TOKENS": "10000",
-    "CLAUDE_AUTOCOMPACT_PCT_OVERRIDE": "70"
-  },
-  {{ else }}
   "env": {
     "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1",
     "MAX_THINKING_TOKENS": "10000",
     "CLAUDE_AUTOCOMPACT_PCT_OVERRIDE": "70"
   },
-  {{ end -}}
   "includeCoAuthoredBy": false,
   "permissions": {
     "allow": [
