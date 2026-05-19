@@ -1,10 +1,7 @@
 {
   {{ if .is_work -}}
-  "awsAuthRefresh": "aws sso login --profile global",
   "env": {
     "CLAUDE_CODE_USE_BEDROCK": "1",
-    "AWS_PROFILE": "global",
-    "AWS_REGION": "eu-central-2",
     "ANTHROPIC_MODEL": "eu.anthropic.claude-opus-4-6-v1",
     "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1",
     "MAX_THINKING_TOKENS": "10000",

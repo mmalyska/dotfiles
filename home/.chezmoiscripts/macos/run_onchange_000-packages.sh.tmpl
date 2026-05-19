@@ -7,15 +7,16 @@ set -euo pipefail
 brew update
 
 # Common
-brew install claude-code visual-studio-code gh ghostty
+brew install claude-code gh ghostty
+brew install visual-studio-code || true  # already installed outside Homebrew is fine
 brew install PeonPing/tap/peon-ping && peon-ping-setup --packs=peon
 
 # JetBrains Toolbox
-brew install --cask jetbrains-toolbox
+brew install --cask jetbrains-toolbox || true  # already installed outside Homebrew is fine
 
 {{ if .is_work -}}
 # Work-specific
-brew install slack
+brew install slack || true  # already installed outside Homebrew is fine
 export HOMEBREW_GITHUB_API_TOKEN=$(gh auth token)
 brew tap docplanner/team-cli https://github.com/DocPlanner/team-cli.git
 brew tap docplanner/dp-platform-setup https://github.com/DocPlanner/dp-platform-setup.git
