@@ -15,3 +15,8 @@ claude plugin install agent-toolkit@mmalyska-claude-plugins
 claude plugin install renovate@mmalyska-claude-plugins
 claude plugin install devcontainer@mmalyska-claude-plugins
 claude plugin install android@mmalyska-claude-plugins
+
+claude plugin install superpowers@claude-plugins-official || true
+claude plugin install code-simplifier@claude-plugins-official || true
+claude plugin install context7@claude-plugins-official || true
+claude plugin install claude-md-management@claude-plugins-official || true
