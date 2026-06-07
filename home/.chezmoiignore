@@ -15,4 +15,6 @@
 .chezmoiscripts/linux/*
 .chezmoiscripts/macos/*
 .chezmoiscripts/windows/*
+{{- else }}
+.chezmoiscripts/devcontainer/*
 {{- end }}
