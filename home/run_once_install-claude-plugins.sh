@@ -16,6 +16,7 @@ claude plugin install renovate@mmalyska-claude-plugins
 claude plugin install devcontainer@mmalyska-claude-plugins
 claude plugin install android@mmalyska-claude-plugins
 
+claude plugin marketplace add anthropics/claude-plugins-official || true
 claude plugin marketplace update claude-plugins-official
 claude plugin install superpowers@claude-plugins-official || true
 claude plugin install code-simplifier@claude-plugins-official || true
