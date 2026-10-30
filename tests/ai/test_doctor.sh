@@ -125,7 +125,7 @@ codex_cfg "$KHOME" "$SHA"
 # XDG_* pinned under $KHOME so chezmoi finds the config/state below $KHOME whatever the runner exports
 kenv() { env -u XDG_STATE_HOME -u CLAUDE_CONFIG_DIR -u CODEX_HOME HOME="$KHOME" XDG_CONFIG_HOME="$KHOME/.config" XDG_DATA_HOME="$KHOME/.local/share" XDG_CACHE_HOME="$KHOME/.cache" PATH="$WITH_CHEZMOI" AI_TEST_LOG="$KLOG" AI_TEST_CANARY="$CANARY" "$@"; }
 FIX="$T/codex-claude-fixed.json"; cp "$T/both-full.json" "$FIX"
-kenv STUB_FAIL="plugin+add" STUB_STATE="$T/claude-full.json" timeout 60 "$CHEZMOI" apply </dev/null >"$T/apply1.out" 2>&1 || { cat "$T/apply1.out"; _fail "(f) first apply"; }
+kenv STUB_FAIL="plugin+add" STUB_STATE="$T/claude-full.json" "$TIMEOUT" 60 "$CHEZMOI" apply </dev/null >"$T/apply1.out" 2>&1 || { cat "$T/apply1.out"; _fail "(f) first apply"; }
 CANARY_N=$(wc -l < "$CANARY"); assert_eq "(f) canaries once" "$CANARY_N" "2"
 DOC="$KHOME/.local/bin/ai-workflow-doctor"
 [ -x "$DOC" ] || _fail "(f) doctor not installed by apply"

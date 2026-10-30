@@ -135,7 +135,7 @@ printf '#!/usr/bin/env bash\necho once >> "$AI_TEST_CANARY"\n' > "$SRC/home/.che
 printf '#!/usr/bin/env bash\necho onchange >> "$AI_TEST_CANARY"\n' > "$SRC/home/.chezmoiscripts/run_onchange_canary-onchange.sh"
 KHOME="$T/khome"; mkdir -p "$KHOME"; CANARY="$T/canary.log"; : > "$CANARY"; KLOG="$T/k.log"
 KCMD=(env -u XDG_STATE_HOME -u CLAUDE_CONFIG_DIR HOME="$KHOME" PATH="$STUBS:$BASE_PATH" AI_TEST_LOG="$KLOG" AI_TEST_CANARY="$CANARY")
-apply() { "${KCMD[@]}" "$@" timeout 60 "$CHEZMOI" apply --source "$SRC" --config "$FIXTURES/core-linux.toml" \
+apply() { "${KCMD[@]}" "$@" "$TIMEOUT" 60 "$CHEZMOI" apply --source "$SRC" --config "$FIXTURES/core-linux.toml" \
     --destination "$KHOME" --persistent-state "$T/state.boltdb" --cache "$T/kcache" </dev/null >"$T/apply.out" 2>&1; }
 KEY="$KHOME/.chezmoiscripts/ai/100-claude-plugins.sh"
 : > "$KLOG"

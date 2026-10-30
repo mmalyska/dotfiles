@@ -180,7 +180,7 @@ recovery() { # recovery <name> <STUB_FAIL value> <expected fails>
     local KHOME="$T/khome.$n" CANARY="$T/canary.$n.log" KLOG="$T/k.$n.log" ST="$T/state.$n.boltdb"
     mkdir -p "$KHOME"; : > "$CANARY"; : > "$KLOG"
     local KCMD=(env -u XDG_STATE_HOME -u CLAUDE_CONFIG_DIR -u CODEX_HOME HOME="$KHOME" PATH="$STUBS:$BASE_PATH" AI_TEST_LOG="$KLOG" AI_TEST_CANARY="$CANARY")
-    apply() { "${KCMD[@]}" "$@" timeout 60 "$CHEZMOI" apply --source "$SRC" --config "$FIXTURES/core-linux.toml" \
+    apply() { "${KCMD[@]}" "$@" "$TIMEOUT" 60 "$CHEZMOI" apply --source "$SRC" --config "$FIXTURES/core-linux.toml" \
         --destination "$KHOME" --persistent-state "$ST" --cache "$T/kcache.$n" </dev/null >"$T/apply.$n.out" 2>&1; }
     local key="$KHOME/.chezmoiscripts/ai/110-codex-plugins.sh" status="$KHOME/.local/state/ai-workflow/codex.status"
     apply STUB_FAIL="$fail" || { cat "$T/apply.$n.out"; _fail "($n 1) apply failed"; }
