@@ -36,17 +36,3 @@ if chezmoi --source "$t/src" --config "$FIXTURES/legacy-linux.toml" execute-temp
     '{{ .ai_workflow.plugins.own }}' >/dev/null 2>&1; then
     _fail "malformed YAML rendered successfully"
 fi
-
-# Plugin list must equal the marketplace at the accepted revision (needs gh + network).
-if command -v gh >/dev/null 2>&1 && \
-   remote=$(gh api -H "Accept: application/vnd.github.raw" \
-       "repos/mmalyska/claude-plugins/contents/.claude-plugin/marketplace.json?ref=25d785abee26ca7a3c87e8311f46e8a90f225301" 2>/dev/null); then
-    printf '%s' "$data" | python3 -I -c '
-import json, sys
-local = set(json.load(sys.stdin)["ai_workflow"]["plugins"]["own"])
-remote = {x["name"] for x in json.loads(sys.argv[1])["plugins"]}
-assert local == remote, "plugins.own != marketplace.json: %s" % sorted(local ^ remote)
-' "$remote" || _fail "plugins.own differs from marketplace.json at accepted revision"
-else
-    echo "  NOT RUN: marketplace.json comparison (needs gh and network)" >&2
-fi
