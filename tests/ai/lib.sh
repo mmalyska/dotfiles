@@ -107,3 +107,9 @@ run_installer() {
     RC=$?
 }
 status_of() { cat "$HOMEDIR/.local/state/ai-workflow/claude.status"; }
+write_codex_state() { # file plugin@marketplace...: `codex plugin list --json` shaped state
+    local f=$1 first=1 id; shift
+    { echo '{'; echo '  "installed": ['
+      for id in "$@"; do [ $first = 1 ] || echo ","; first=0; printf '    {\n      "pluginId": "%s",\n      "installed": true\n    }' "$id"; done
+      echo; echo '  ]'; echo '}'; } > "$f"
+}
