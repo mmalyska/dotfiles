@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+# Shared helpers for tests/ai. Source from test_*.sh; do not execute.
+# Prompt texts are part of the contract with `chezmoi init --promptChoice/--promptBool`
+# (flags are keyed by prompt text, not by data key) and must match home/.chezmoi.toml.tmpl.
+PROMPT_PROFILE="AI profile"
+PROMPT_TEAMS="Enable Claude agent teams"
+
+AI_ROOT="${AI_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
+FIXTURES="$AI_ROOT/tests/ai/fixtures"
+GOLDEN="$AI_ROOT/tests/ai/golden"
+AI_TMPS=()
+
+_fail() { echo "  ASSERT FAILED: $*" >&2; exit 1; }
+
+assert_eq() { # name actual expected  (multi-line values are reported as a diff)
+    [ "$2" = "$3" ] && return 0
+    echo "  ASSERT FAILED: $1" >&2
+    diff <(printf '%s\n' "$3") <(printf '%s\n' "$2") | head -20 | sed 's/^/    /' >&2
+    exit 1
+}
+assert_contains() { # name haystack needle
+    case "$2" in *"$3"*) ;; *) _fail "$1: [$3] not found";; esac
+}
+assert_not_contains() { # name haystack needle
+    case "$2" in *"$3"*) _fail "$1: unexpected [$3] found";; esac
+}
+assert_calls() { # name logfile extended-regex expected-count
+    local n
+    n=$(grep -cE "$3" "$2" 2>/dev/null || true)
+    [ "${n:-0}" = "$4" ] || _fail "$1: expected $4 calls matching /$3/, got ${n:-0}"
+}
+
+# new_tmp: private temp dir removed on exit (only directories created here).
+new_tmp() {
+    local d
+    d=$(mktemp -d)
+    AI_TMPS+=("$d")
+    printf '%s\n' "$d"
+}
+_cleanup() { local d; for d in "${AI_TMPS[@]:-}"; do [ -n "$d" ] && rm -rf "$d"; done; }
+trap _cleanup EXIT
+
+# render <fixture-name> <template-path-relative-to-repo>  (stdout)
+render() {
+    chezmoi --source "$AI_ROOT" --config "$FIXTURES/$1.toml" execute-template \
+        < "$AI_ROOT/$2"
+}
+
+# sorted_json: normalise JSON on stdin (valid JSON required)
+sorted_json() { python3 -I -m json.tool --sort-keys; }
