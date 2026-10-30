@@ -114,6 +114,46 @@ assert_eq "(m) rc" "$RC" "0"
 assert_calls "(m) installs" "$LOG" "^claude plugin install" 0
 assert_contains "(m) status" "$(status_of)" "result=partial"
 
+# (l) settings.json: the exact bytes and mode are put back after the CLI rewrote it, in every outcome
+mode_of() { python3 -I -c 'import os,sys; print(oct(os.stat(sys.argv[1]).st_mode & 0o777))' "$1"; }
+ORIG_BYTES=$(printf '{\n  "model":   "opusplan",\n\t"env": {}\n}\n')
+settings_run() { # <seed:file|none> [VAR=value...]: fresh HOME, seeded settings.json (mode 640); sets RC OUT LOG, SF
+    local seed=$1; shift
+    HOMEDIR="$T/home.l.$RANDOM"; LOG="$T/calls.$RANDOM.log"; : > "$LOG"; SF="$HOMEDIR/.claude/settings.json"
+    mkdir -p "$HOMEDIR/.claude" "$T/tmpd"; rm -rf "$T/tmpd"/*
+    if [ "$seed" = file ]; then printf '%s\n' "$ORIG_BYTES" > "$SF"; chmod 640 "$SF"; fi
+    OUT=$(env -u XDG_STATE_HOME -u CLAUDE_CONFIG_DIR HOME="$HOMEDIR" PATH="$STUBS:$BASE_PATH" TMPDIR="$T/tmpd" AI_TEST_LOG="$LOG" "$@" bash "$S" 2>&1); RC=$?
+}
+settings_run file STUB_REWRITE_SETTINGS=1
+assert_eq "(l1) rc" "$RC" "0"
+assert_calls "(l1) installs happened" "$LOG" "^claude plugin install" 12
+assert_eq "(l1) bytes restored" "$(cat "$SF")" "$ORIG_BYTES"
+assert_eq "(l1) mode kept" "$(mode_of "$SF")" "0o640"
+assert_contains "(l1) status" "$(status_of)" "result=ok"
+assert_eq "(l1) no temp left" "$(find "$T/tmpd" -mindepth 1 | wc -l | tr -d ' ')" "0"
+[ -z "$(find "$HOMEDIR/.claude" -mindepth 1 ! -name settings.json)" ] || _fail "(l1) stray files next to settings.json"
+settings_run file STUB_REWRITE_SETTINGS=1 STUB_FAIL="install"
+assert_eq "(l2) bytes restored after failures" "$(cat "$SF")" "$ORIG_BYTES"
+assert_contains "(l2) status" "$(status_of)" "fails=12"
+settings_run none STUB_REWRITE_SETTINGS=1
+[ ! -e "$SF" ] || _fail "(l3) settings.json created by the CLI was not removed"
+assert_contains "(l3) status" "$(status_of)" "result=ok"
+settings_run file STUB_REWRITE_SETTINGS=1 STUB_STATE="$FULL_STATE" STUB_MARKETPLACES="$MK_OWN"
+assert_calls "(l5) mutating" "$LOG" "$mutating" 0
+assert_eq "(l5) bytes unchanged" "$(cat "$SF")" "$ORIG_BYTES"
+settings_run file STUB_REWRITE_SETTINGS=dir
+assert_eq "(l4) rc stays 0" "$RC" "0"
+assert_contains "(l4) warn" "$OUT" "could not restore"
+assert_contains "(l4) partial" "$(status_of)" "result=partial"
+[ -z "$(find "$SF" -mindepth 1 2>/dev/null)" ] || _fail "(l4) a restore temp file was left inside the replaced path"
+assert_eq "(l4) no temp left" "$(find "$T/tmpd" -mindepth 1 | wc -l | tr -d ' ')" "0"
+settings_run file STUB_REWRITE_SETTINGS=1 STUB_FAIL="marketplace"
+assert_eq "(l6) bytes restored when the marketplace fails" "$(cat "$SF")" "$ORIG_BYTES"
+HOMEDIR="$T/home.l7"; mkdir -p "$HOMEDIR/.claude"; printf '%s\n' "$ORIG_BYTES" > "$HOMEDIR/.claude/settings.json"; : > "$T/l7.log"
+env -u XDG_STATE_HOME HOME="$HOMEDIR" PATH="$STUBS:$BASE_PATH" AI_TEST_LOG="$T/l7.log" STUB_REWRITE_SETTINGS=1 bash "$S_OFF" >/dev/null 2>&1
+assert_eq "(l7) ai_claude=false leaves settings alone" "$(cat "$HOMEDIR/.claude/settings.json")" "$ORIG_BYTES"
+[ ! -s "$T/l7.log" ] || _fail "(l7) calls were made"
+
 # static policy on the rendered script
 for f in "$S" "$S_EXT" "$S_MIN"; do
     ! grep -q '|| true' "$f" || _fail "rendered installer contains '|| true'"

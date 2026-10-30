@@ -24,6 +24,67 @@ $OfficialRepo = {{ $official.repo | squote }}
 $Plugins = @({{ join " " $plugins | squote }} -split ' ' | Where-Object { $_ })
 $Extras = @({{ join " " $extras | squote }} -split ' ' | Where-Object { $_ })
 
+# settings.json stays fully managed by chezmoi, but the claude CLI rewrites it (same content, other key order) whenever it
+# installs something, and chezmoi would then stop at "has changed since chezmoi last wrote it". So the exact bytes (and mode)
+# are saved before the first mutating command and always put back afterwards: a file the CLI created is removed, a replaced
+# file is restored by copy-next-to-it and rename over it. Same semantics as the Bash installer.
+function Get-ClaudeConfigDir {
+    if ($env:CLAUDE_CONFIG_DIR) { return $env:CLAUDE_CONFIG_DIR }
+    return (Join-Path $HOME '.claude')
+}
+$script:SnapState = 'none'
+$script:SnapDir = ''
+
+# Save-SettingsSnapshot -> $true when the snapshot is taken
+function Save-SettingsSnapshot {
+    $path = Join-Path (Get-ClaudeConfigDir) 'settings.json'
+    try {
+        $dir = Join-Path ([System.IO.Path]::GetTempPath()) ('ai-settings-' + [guid]::NewGuid().ToString('N'))
+        New-Item -ItemType Directory -Path $dir -ErrorAction Stop | Out-Null
+        $script:SnapDir = $dir
+        if (Test-Path -LiteralPath $path) {
+            Copy-Item -LiteralPath $path -Destination (Join-Path $dir 'settings.json') -ErrorAction Stop
+            $script:SnapState = 'present'
+        } else {
+            $script:SnapState = 'absent'
+        }
+        return $true
+    } catch {
+        if ($script:SnapDir) { Remove-Item -LiteralPath $script:SnapDir -Recurse -Force -ErrorAction SilentlyContinue }
+        return $false
+    }
+}
+
+# Restore-Settings: idempotent; a failure to put the original back is counted (result partial)
+function Restore-Settings {
+    $path = Join-Path (Get-ClaudeConfigDir) 'settings.json'
+    if ($script:SnapState -eq 'present') {
+        $tmp = "$path.ai-restore"
+        try {
+            if (Test-Path -LiteralPath $path -PathType Container) { throw 'settings.json is a directory' }
+            Copy-Item -LiteralPath (Join-Path $script:SnapDir 'settings.json') -Destination $tmp -Force -ErrorAction Stop
+            Move-Item -LiteralPath $tmp -Destination $path -Force -ErrorAction Stop
+            Write-AiLog 'INFO' 'settings.json restored to its pre-install bytes'
+        } catch {
+            Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue
+            Write-AiLog 'WARN' "could not restore $path; the next chezmoi apply may report it as changed"
+            $script:AiFails++
+        }
+    } elseif ($script:SnapState -eq 'absent') {
+        if (Test-Path -LiteralPath $path) {
+            try {
+                Remove-Item -LiteralPath $path -Recurse -Force -ErrorAction Stop
+                Write-AiLog 'INFO' 'removed settings.json created by the claude CLI'
+            } catch {
+                Write-AiLog 'WARN' "could not remove $path created by the claude CLI"
+                $script:AiFails++
+            }
+        }
+    }
+    $script:SnapState = 'none'
+    if ($script:SnapDir) { Remove-Item -LiteralPath $script:SnapDir -Recurse -Force -ErrorAction SilentlyContinue; $script:SnapDir = '' }
+}
+
 # Get-ClaudeIds <list|marketplace>: installed plugin ids / configured marketplace names
 function Get-ClaudeIds {
     param([string]$Kind)
@@ -76,24 +137,29 @@ function Invoke-Main {
         Write-AiLog 'SKIP' 'ai_claude=false'
     } elseif (-not (Test-AiCommand 'claude')) {
         Write-AiLog 'SKIP' 'claude CLI not found'
+    } elseif (-not (Save-SettingsSnapshot)) {
+        Write-AiLog 'WARN' 'could not snapshot settings.json; installing nothing'
+        $script:AiFails++
     } else {
-        if (Confirm-ClaudeMarketplace $OwnName $OwnRepo) {
-            $configDir = $env:CLAUDE_CONFIG_DIR
-            if (-not $configDir) { $configDir = Join-Path $HOME '.claude' }
-            $head = Get-AiMarketplaceHead (Join-Path $configDir "plugins/marketplaces/$OwnName")
-            if ($head -and $head -ne $script:AiAcceptedSha) {
-                Write-AiLog 'WARN' "drift: $OwnName is at $head, accepted $($script:AiAcceptedSha)"
-            }
-            Install-ClaudeMissing $OwnName $Plugins
-        } else {
-            Write-AiLog 'WARN' "skipping $OwnName plugins: marketplace unavailable"
-        }
-        if ($Extras.Count -gt 0) {
-            if (Confirm-ClaudeMarketplace $OfficialName $OfficialRepo) {
-                Install-ClaudeMissing $OfficialName $Extras
+        try {
+            if (Confirm-ClaudeMarketplace $OwnName $OwnRepo) {
+                $head = Get-AiMarketplaceHead (Join-Path (Get-ClaudeConfigDir) "plugins/marketplaces/$OwnName")
+                if ($head -and $head -ne $script:AiAcceptedSha) {
+                    Write-AiLog 'WARN' "drift: $OwnName is at $head, accepted $($script:AiAcceptedSha)"
+                }
+                Install-ClaudeMissing $OwnName $Plugins
             } else {
-                Write-AiLog 'WARN' "skipping $OfficialName plugins: marketplace unavailable"
+                Write-AiLog 'WARN' "skipping $OwnName plugins: marketplace unavailable"
             }
+            if ($Extras.Count -gt 0) {
+                if (Confirm-ClaudeMarketplace $OfficialName $OfficialRepo) {
+                    Install-ClaudeMissing $OfficialName $Extras
+                } else {
+                    Write-AiLog 'WARN' "skipping $OfficialName plugins: marketplace unavailable"
+                }
+            }
+        } finally {
+            Restore-Settings
         }
     }
     Invoke-AiSummary 'claude'

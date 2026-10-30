@@ -12,12 +12,6 @@ render_doctor() { # <fixture> -> path of the rendered doctor
     "$CHEZMOI" --source "$AI_ROOT" --config "$FIXTURES/$1.toml" execute-template < "$AI_ROOT/$DOCTOR_TPL" > "$T/doctor.$1.sh"
     echo "$T/doctor.$1.sh"
 }
-write_codex_state() { # file id...
-    local f=$1 first=1 id; shift
-    { echo '{'; echo '  "installed": ['
-      for id in "$@"; do [ $first = 1 ] || echo ","; first=0; printf '    {\n      "pluginId": "%s",\n      "installed": true\n    }' "$id"; done
-      echo; echo '  ]'; echo '}'; } > "$f"
-}
 status_file() { # <home> <harness> <result> <fails>
     mkdir -p "$1/.local/state/ai-workflow"
     printf 'result=%s\nfails=%s\naccepted_sha=%s\ntime=x\n' "$3" "$4" "$SHA" > "$1/.local/state/ai-workflow/$2.status"

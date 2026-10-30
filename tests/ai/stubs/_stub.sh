@@ -6,6 +6,17 @@
 # word to that stub (codex:marketplace fails codex only). `plugin list` prints $STUB_STATE.
 name=$1; shift
 echo "$name $*" >> "${AI_TEST_LOG:-/dev/null}"
+# STUB_REWRITE_SETTINGS=1: like the real claude CLI, a mutating call rewrites (or creates) settings.json, even when it then fails.
+# =dir: it leaves a directory in its place (restoring must fail). Path: ${CLAUDE_CONFIG_DIR:-$HOME/.claude}/settings.json
+if [ "$name" = claude ] && [ -n "${STUB_REWRITE_SETTINGS:-}" ]; then
+    case "$1 $2 $3" in "plugin install "*|"plugin uninstall "*|"plugin marketplace "*)
+        case "$3" in list) ;; *)
+            f="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/settings.json"
+            if [ "$STUB_REWRITE_SETTINGS" = dir ]; then rm -rf "$f"; mkdir -p "$f"
+            else mkdir -p "$(dirname "$f")"; printf '{ "rewritten": "by-stub" }\n' > "$f.stub-tmp" && mv -f "$f.stub-tmp" "$f"; fi;;
+        esac;;
+    esac
+fi
 for w in ${STUB_FAIL:-}; do
     if [[ $w == *:* ]]; then [[ ${w%%:*} == "$name" ]] || continue; w=${w#*:}; fi
     if [[ $w == *+* ]]; then
