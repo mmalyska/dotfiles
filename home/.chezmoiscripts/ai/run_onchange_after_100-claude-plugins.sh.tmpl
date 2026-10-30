@@ -25,6 +25,50 @@ OFFICIAL_REPO={{ $official.repo | quote }}
 PLUGINS={{ join " " $plugins | quote }}
 EXTRAS={{ join " " $extras | quote }}
 
+# settings.json stays fully managed by chezmoi, but the claude CLI rewrites it (same content, other key order) whenever it
+# installs something. chezmoi would then stop at "has changed since chezmoi last wrote it" on the next apply. So the exact
+# bytes (and mode) are saved before the first mutating command and always put back afterwards, whatever the commands did:
+# a file the CLI created is removed, a replaced file is restored atomically (copy next to it, then rename).
+SETTINGS="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/settings.json"
+SNAP_STATE=none
+
+snapshot_settings() {
+    SNAP_DIR=$(mktemp -d "${TMPDIR:-/tmp}/ai-settings.XXXXXX") || return 1
+    if [ -e "$SETTINGS" ] || [ -L "$SETTINGS" ]; then
+        cp -p "$SETTINGS" "$SNAP_DIR/settings.json" || return 1
+        SNAP_STATE=present
+    else
+        SNAP_STATE=absent
+    fi
+}
+
+# restore_settings: idempotent, always returns 0; a failure to put the original back is counted in AI_FAILS (result partial)
+restore_settings() {
+    local tmp
+    case "$SNAP_STATE" in
+        present)
+            tmp="$SETTINGS.ai-restore.$$"
+            if [ ! -d "$SETTINGS" ] && cp -p "$SNAP_DIR/settings.json" "$tmp" && mv -f "$tmp" "$SETTINGS"; then
+                ai_log INFO "settings.json restored to its pre-install bytes"
+            else
+                rm -f "$tmp"
+                ai_log WARN "could not restore $SETTINGS; the next chezmoi apply may report it as changed"
+                AI_FAILS=$((AI_FAILS + 1))
+            fi;;
+        absent)
+            if [ -e "$SETTINGS" ] || [ -L "$SETTINGS" ]; then
+                if rm -rf "$SETTINGS"; then
+                    ai_log INFO "removed settings.json created by the claude CLI"
+                else
+                    ai_log WARN "could not remove $SETTINGS created by the claude CLI"
+                    AI_FAILS=$((AI_FAILS + 1))
+                fi
+            fi;;
+    esac
+    SNAP_STATE=none
+    [ -z "${SNAP_DIR:-}" ] || rm -rf "$SNAP_DIR"
+}
+
 # claude_ids <list|marketplace>: installed plugin ids / configured marketplace names, one per line
 claude_ids() {
     local out
@@ -71,7 +115,12 @@ main() {
         ai_log SKIP "ai_claude=false"
     elif ! ai_have claude; then
         ai_log SKIP "claude CLI not found"
+    elif ! snapshot_settings; then
+        ai_log WARN "could not snapshot $SETTINGS; installing nothing"
+        [ -z "${SNAP_DIR:-}" ] || rm -rf "$SNAP_DIR"
+        AI_FAILS=$((AI_FAILS + 1))
     else
+        trap restore_settings EXIT
         if ensure_marketplace "$OWN_NAME" "$OWN_REPO"; then
             head=$(ai_marketplace_head "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/plugins/marketplaces/$OWN_NAME")
             if [ -n "$head" ] && [ "$head" != "$AI_ACCEPTED_SHA" ]; then
@@ -90,6 +139,8 @@ main() {
                 ai_log WARN "skipping $OFFICIAL_NAME plugins: marketplace unavailable"
             fi
         fi
+        restore_settings
+        trap - EXIT
     fi
     ai_summary claude
 }

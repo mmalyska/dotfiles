@@ -44,7 +44,7 @@ cx() { # <cell> <cmd...>: run inside the cell (private HOME/XDG, stub PATH, call
     local c=$1; shift
     env -u XDG_STATE_HOME -u CLAUDE_CONFIG_DIR -u CODEX_HOME HOME="$c/home" XDG_CONFIG_HOME="$c/home/.config" \
         XDG_DATA_HOME="$c/home/.local/share" XDG_CACHE_HOME="$c/home/.cache" PATH="$c/bin:$BASE_PATH" \
-        AI_TEST_LOG="$c/calls.log" AI_TEST_CANARY="$c/canary.log" "$@"
+        AI_TEST_LOG="$c/calls.log" AI_TEST_CANARY="$c/canary.log" STUB_REWRITE_SETTINGS=1 "$@"
 }
 cz() { cx "$1" "$TIMEOUT" 60 chezmoi --source "$SRC" "${@:2}" </dev/null; } # chezmoi in a cell
 render_tpl() { cx "$1" chezmoi --source "$SRC" execute-template < "$2"; }   # <cell> <template>: stdout
@@ -274,6 +274,23 @@ cx "$c" claude plugin disable "superpowers@$OFFICIAL" || _fail "(sp) stub disabl
 doctor_strict "$c" STUB_STATE="$T/full-ext.json"
 assert_eq "(sp) doctor strict rc" "$RC" "0"
 CELLS=$((CELLS + 1)); echo "  superpowers disabled: apply and doctor unaffected"
+
+# ---- existing host, profile switch that installs more plugins (the CLI rewrites settings.json while chezmoi has a recorded hash) ----
+c=$(mk_cell switch both)
+init_apply "$c" minimal
+assert_calls "(switch) minimal installs" "$c/calls.log" "^claude plugin install" 2
+sed -i.bak 's/^\( *\)ai_profile *=.*/\1ai_profile = "claude-extended"/' "$c/home/.config/chezmoi/chezmoi.toml"
+: > "$c/calls.log"
+write_state "$T/min-installed.json" "git-workflows@$OWN" "development-lifecycle@$OWN"   # what the first apply installed
+write_marketplaces "$T/mk-own.json" "$OWN"
+cx "$c" env STUB_STATE="$T/min-installed.json" STUB_MARKETPLACES="$T/mk-own.json" "$TIMEOUT" 60 chezmoi --source "$SRC" apply </dev/null >"$c/apply.out" 2>&1 \
+    || { cat "$c/apply.out"; _fail "(switch) plain apply after the profile switch failed"; }
+assert_calls "(switch) installs after the switch" "$c/calls.log" "^claude plugin install" 14
+assert_eq "(switch) settings plugins" "$(settings_plugins "$c")" "16 12 4"
+assert_clean_diff "$c"
+: > "$c/calls.log"; reapply "$c"; assert_clean_diff "$c"
+[ ! -s "$c/calls.log" ] || _fail "(switch) the apply after the switch re-ran something"
+CELLS=$((CELLS + 1)); echo "  switch: minimal -> claude-extended on an existing host, plain apply, empty diff"
 
 # ---- policy: the whole-bucket and full state resets appear only as prohibitions (this file is the scanner, excluded), in docs, scripts and tests ----
 FORBIDDEN_RE='delete-bucket|state reset'

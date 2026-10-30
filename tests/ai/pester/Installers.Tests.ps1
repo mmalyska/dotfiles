@@ -75,9 +75,22 @@ Describe 'Claude installer (100-claude-plugins.ps1)' {
         $global:StubFail = @()
         $global:StubState = '[]'
         $global:StubMarkets = '[]'
+        $global:StubRewrite = ''
         function global:claude {
             [void]$global:AiCalls.Add("claude $args")
             $global:LASTEXITCODE = 0
+            # like the real CLI: a mutating call rewrites (or creates) settings.json, even when it then fails; 'dir' leaves a directory
+            if ($global:StubRewrite -and $args[0] -eq 'plugin' -and (($args[1] -eq 'install') -or ($args[1] -eq 'marketplace' -and $args[2] -ne 'list'))) {
+                $f = Join-Path $env:CLAUDE_CONFIG_DIR 'settings.json'
+                New-Item -ItemType Directory -Force -Path $env:CLAUDE_CONFIG_DIR | Out-Null
+                if ($global:StubRewrite -eq 'dir') {
+                    Remove-Item -LiteralPath $f -Recurse -Force -ErrorAction SilentlyContinue
+                    New-Item -ItemType Directory -Path $f | Out-Null
+                } else {
+                    [System.IO.File]::WriteAllText("$f.stub-tmp", '{ "rewritten": "by-stub" }', (New-Object System.Text.UTF8Encoding($false)))
+                    Move-Item -LiteralPath "$f.stub-tmp" -Destination $f -Force
+                }
+            }
             $line = " $args "
             foreach ($w in $global:StubFail) {
                 if ($line -like "* $w *") { $global:LASTEXITCODE = 1; return }
@@ -157,6 +170,66 @@ Describe 'Claude installer (100-claude-plugins.ps1)' {
         $global:AiRc | Should -Be 0
         Count-Calls '^claude plugin install' | Should -Be 0
         (Get-Content -Raw (Join-Path $env:XDG_STATE_HOME 'ai-workflow/claude.status')) | Should -Match 'result=partial'
+    }
+
+    Context 'settings.json is restored byte for byte' {
+        BeforeEach {
+            $script:Orig = [System.Text.Encoding]::UTF8.GetBytes("{`n  `"model`":   `"opusplan`",`n`t`"env`": {}`n}`n")
+            $script:SettingsFile = Join-Path $env:CLAUDE_CONFIG_DIR 'settings.json'
+        }
+        function script:Seed-Settings {
+            New-Item -ItemType Directory -Force -Path $env:CLAUDE_CONFIG_DIR | Out-Null
+            [System.IO.File]::WriteAllBytes($script:SettingsFile, $script:Orig)
+            if ($IsLinux -or $IsMacOS) { & chmod 640 $script:SettingsFile }
+        }
+        function script:Same-Bytes { return (([System.IO.File]::ReadAllBytes($script:SettingsFile) -join ',') -eq ($script:Orig -join ',')) }
+
+        It 'after the CLI rewrote it: same bytes, plugins still installed (calls made), no stray files' {
+            Seed-Settings
+            $global:StubRewrite = '1'
+            $s = Render-Installer 'core-linux' $script:ClaudeTpl
+            [void](Run-Installer $s)
+            $global:AiRc | Should -Be 0
+            Count-Calls '^claude plugin install' | Should -Be 12
+            Same-Bytes | Should -BeTrue
+            if ($IsLinux -or $IsMacOS) { (& stat -c %a $script:SettingsFile 2>$null) + '' | Should -BeIn @('640', '') }
+            @(Get-ChildItem -LiteralPath $env:CLAUDE_CONFIG_DIR -Force | Where-Object { $_.Name -ne 'settings.json' }).Count | Should -Be 0
+            (Get-Content -Raw (Join-Path $env:XDG_STATE_HOME 'ai-workflow/claude.status')) | Should -Match 'result=ok'
+        }
+        It 'also after failing installs' {
+            Seed-Settings
+            $global:StubRewrite = '1'; $global:StubFail = @('install')
+            $s = Render-Installer 'core-linux' $script:ClaudeTpl
+            [void](Run-Installer $s)
+            Same-Bytes | Should -BeTrue
+            (Get-Content -Raw (Join-Path $env:XDG_STATE_HOME 'ai-workflow/claude.status')) | Should -Match 'fails=12'
+        }
+        It 'removes a settings.json the CLI created when there was none' {
+            $global:StubRewrite = '1'
+            $s = Render-Installer 'core-linux' $script:ClaudeTpl
+            [void](Run-Installer $s)
+            Test-Path -LiteralPath $script:SettingsFile | Should -BeFalse
+            (Get-Content -Raw (Join-Path $env:XDG_STATE_HOME 'ai-workflow/claude.status')) | Should -Match 'result=ok'
+        }
+        It 'reports partial, exit 0 and leaves no temp file when the restore is impossible' {
+            Seed-Settings
+            $global:StubRewrite = 'dir'
+            $s = Render-Installer 'core-linux' $script:ClaudeTpl
+            $out = Run-Installer $s
+            $global:AiRc | Should -Be 0
+            $out | Should -Match 'could not restore'
+            (Get-Content -Raw (Join-Path $env:XDG_STATE_HOME 'ai-workflow/claude.status')) | Should -Match 'result=partial'
+            @(Get-ChildItem -LiteralPath $script:SettingsFile -Force).Count | Should -Be 0
+            Remove-Item -LiteralPath $script:SettingsFile -Recurse -Force
+        }
+        It 'does not touch settings.json when ai_claude=false' {
+            Seed-Settings
+            $global:StubRewrite = '1'
+            $s = Render-Installer 'core-noclaude-linux' $script:ClaudeTpl
+            [void](Run-Installer $s)
+            Same-Bytes | Should -BeTrue
+            $global:AiCalls.Count | Should -Be 0
+        }
     }
 
     It 'AI_WORKFLOW_UPGRADE=1 runs exactly one marketplace update and nothing else mutating' {

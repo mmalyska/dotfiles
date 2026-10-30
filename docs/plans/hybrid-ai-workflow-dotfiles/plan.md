@@ -238,6 +238,11 @@ Fallback w `ai-profile.tmpl` jest zatem wyłącznie zabezpieczeniem dla `apply` 
 wygenerowana nowym szablonem ma klucze jawnie. Znane granice: ręcznie założony plik konfiguracji bez `ai_profile` na „nowej" maszynie zostanie uznany za istniejący host
 (wybór świadomy przez `--prompt`); teksty promptów są częścią kontraktu z flagami `--promptChoice/--promptBool` (R12) i są stałymi w `tests/ai/lib.sh`.
 
+**D-H. `settings.json` i zapisy CLI Claude (rev. 2 po PR-5).** `settings.json` pozostaje w pełni zarządzany przez chezmoi. Prawdziwe `claude plugin install` przepisuje ten plik (ta sama treść, inna kolejność kluczy),
+przez co zwykły drugi `chezmoi apply` kończył się konfliktem „has changed since chezmoi last wrote it". Spike `run_onchange_before_` przeszedł dla świeżego hosta, ale padał na hoście istniejącym, gdy instalator coś instaluje
+(zmiana profilu) — odrzucone. Przyjęte: instalator Claude (Bash i PowerShell, nadal `run_onchange_after_`) robi snapshot dokładnych bajtów i uprawnień `settings.json` przed pierwszą komendą mutującą i zawsze go przywraca
+(atomowo; plik utworzony przez CLI usuwa; błąd snapshotu lub przywrócenia = `partial`). Nazwa skryptu i klucz `entryState` bez zmian. Dowody: `docs/workflow/evidence/T13-e2e.md`.
+
 **D-F. OpenCode:** wyłącznie dane `ai_opencode: false` + dokument spike'u (T12). `opencode` jest wykrywany przez doctor
 (informacyjnie). Brak instalatora, brak wymogu.
 

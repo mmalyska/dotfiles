@@ -73,11 +73,13 @@ AI_WORKFLOW_UPGRADE=1 chezmoi apply
 `AI_WORKFLOW_UPGRADE=1` is the only thing that makes the Claude installer run `claude plugin marketplace update`.
 Without it the installers never update an existing marketplace.
 
-**Known behaviour of the real Claude CLI.** Installing a plugin makes `claude` rewrite `~/.claude/settings.json` with the
-same content in another key order and format. `chezmoi apply` then stops at
-`settings.json has changed since chezmoi last wrote it` (no TTY: exit 1). The content is equal, so after the backup in step 1
-and a look at `chezmoi diff`, run `chezmoi apply --force` to accept the managed version. Measured in
-[evidence/T13-e2e.md](evidence/T13-e2e.md); a structural fix (a merging `modify_` script) is a separate decision.
+**`settings.json` and the Claude CLI.** `~/.claude/settings.json` stays fully managed by chezmoi. Installing a plugin makes the
+`claude` CLI rewrite it (same content, other key order), which would make the next `chezmoi apply` stop at
+`settings.json has changed since chezmoi last wrote it`. The Claude installer therefore saves the exact bytes and mode before its
+first mutating command and always puts them back afterwards (a file the CLI created is removed). A plain `chezmoi apply` is
+expected to work without `--force`. If the installer logs `could not restore … settings.json` the result is `partial`: copy
+`settings.json` back from the step 1 backup (or run `chezmoi apply --force` once after reading `chezmoi diff`) and use the recovery below.
+Background and measurements: [evidence/T13-e2e.md](evidence/T13-e2e.md), plan D-H.
 
 ### Claude Code
 

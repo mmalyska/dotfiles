@@ -88,24 +88,10 @@ sys.exit(0 if len(e) == int(sys.argv[2]) else 1)' "$c/home/.claude/settings.json
         else
             [ "$(sed -n 's/^result=//p' "$c/home/.local/state/ai-workflow/codex.status")" = skipped ] || { echo "codex.status is not skipped"; exit 1; }
         fi
-        # settings.json: the claude CLI rewrites it (key order, whitespace) while installing plugins. Content must stay equal.
-        render_tpl "$c" "$SRC/home/dot_claude/settings.json.tmpl" > "$c/settings.rendered.json"
-        python3 -I -c '
-import json, sys
-sys.exit(0 if json.load(open(sys.argv[1])) == json.load(open(sys.argv[2])) else 1)' "$c/settings.rendered.json" "$c/home/.claude/settings.json" \
-            || { echo "settings.json content differs from the managed render after the installers ran"; exit 1; }
-        # second apply: exit 0 and empty diff. KNOWN: when the claude CLI rewrote settings.json, chezmoi stops on its
-        # "has changed since chezmoi last wrote it" prompt (no TTY: exit 1). Accepted only for exactly that case, then --force.
-        if ! cz "$c" apply >"$c/apply2.out" 2>&1; then
-            if ! grep -q 'settings.json has changed since chezmoi last wrote it' "$c/apply2.out" || { [ "$s" != both ] && [ "$s" != claude ]; }; then
-                tail -5 "$c/apply2.out"; echo "second apply failed"; exit 1
-            fi
-            others=$(cz "$c" diff 2>&1 | sed -n 's/^diff --git a\/\(.*\) b\/.*/\1/p' | grep -v '^.claude/settings.json$' || true)
-            [ -z "$others" ] || { echo "second apply: diff beyond settings.json: $others"; exit 1; }
-            echo "KNOWN plain second apply stops at settings.json (rewritten by the claude CLI, same content); continuing with --force"
-            cz "$c" apply --force >"$c/apply2f.out" 2>&1 || { tail -5 "$c/apply2f.out"; echo "second apply --force failed"; exit 1; }
-        fi
-        [ -z "$(cz "$c" diff 2>&1)" ] || { echo "chezmoi diff not empty after the second apply"; exit 1; }
+        # The claude CLI rewrites settings.json while installing; the installer puts the original bytes back. A plain second
+        # apply (no --force, no TTY) must therefore succeed with an empty diff; the plugins stay installed.
+        cz "$c" apply >"$c/apply2.out" 2>&1 || { tail -5 "$c/apply2.out"; echo "second plain apply failed"; exit 1; }
+        [ -z "$(cz "$c" diff 2>&1)" ] || { cz "$c" diff 2>&1 | head -10; echo "chezmoi diff not empty after the second apply"; exit 1; }
         cfg_before=$(sum_file "$c/home/.codex/config.toml"); set_before=$(sum_file "$c/home/.claude/settings.json")
         for t in 100-claude-plugins 110-codex-plugins; do
             render_tpl "$c" "$SRC/home/.chezmoiscripts/ai/run_onchange_after_$t.sh.tmpl" > "$c/$t.sh"
@@ -121,12 +107,28 @@ sys.exit(0 if json.load(open(sys.argv[1])) == json.load(open(sys.argv[2])) else 
         cell_env "$c" bash "$c/home/.local/bin/ai-workflow-doctor" --strict >"$c/doctor.out" 2>&1 || { tail -15 "$c/doctor.out"; echo "doctor --strict exit != 0"; exit 1; }
         ! grep -rEi 'STANDARD|SOLO|topology|ghp_|sk-[a-z0-9]|api[_-]?key|password' "$c/home/.claude/settings.json" >/dev/null || { echo "workflow vocabulary or secret in settings.json"; exit 1; }
     ) 2>&1 ); rc=$?
-    printf '%s\n' "$why" | grep '^KNOWN' || true
     if [ $rc = 0 ]; then cell_pass "$name"; else cell_fail "$name" "$(printf '%s' "$why" | tail -8 | tr '\n' ' ')"; fi
     rm -rf "$c"
 }
 
 for p in minimal core claude-extended; do for s in both claude codex none; do run_cell "$p" "$s"; done; done
+
+# ---- existing host: profile minimal -> claude-extended installs 14 more plugins with the real CLI; plain apply, no --force ----
+if [ -n "$real_claude" ]; then
+    c=$(mk_cell switch claude)
+    why=$( (
+        cell_init "$c" minimal || { tail -5 "$c/init.out"; echo "init failed"; exit 1; }
+        sed -i.bak 's/^\( *\)ai_profile *=.*/\1ai_profile = "claude-extended"/' "$c/home/.config/chezmoi/chezmoi.toml"
+        cz "$c" apply >"$c/apply.out" 2>&1 || { tail -5 "$c/apply.out"; echo "plain apply after the profile switch failed"; exit 1; }
+        [ "$(cell_env "$c" claude plugin list --json | ids_of | wc -l | tr -d ' ')" = 16 ] || { echo "plugins != 16 after the switch"; exit 1; }
+        [ -z "$(cz "$c" diff 2>&1)" ] || { echo "diff not empty after the switch"; exit 1; }
+        cz "$c" apply >"$c/apply.out" 2>&1 || { echo "apply after the switch failed"; exit 1; }
+    ) 2>&1 ); rc=$?
+    if [ $rc = 0 ]; then cell_pass switch/minimal-to-extended; else cell_fail switch/minimal-to-extended "$(printf '%s' "$why" | tail -5 | tr '\n' ' ')"; fi
+    rm -rf "$c"
+else
+    cell_notrun switch/minimal-to-extended "no real claude CLI"
+fi
 
 # ---- flags ----
 flag_cell() { # <name> <claude> <codex>
