@@ -26,7 +26,10 @@ ai_soft() {
 }
 
 # ai_marketplace_head <dir>: HEAD commit of a marketplace checkout, empty when unavailable.
-ai_marketplace_head() { git -C "$1" rev-parse HEAD 2>/dev/null || true; }
+ai_marketplace_head() {
+    local h
+    if h=$(git -C "$1" rev-parse HEAD 2>/dev/null); then printf '%s\n' "$h"; fi
+}
 
 # ai_status_write <harness> <ok|partial|skipped> <fails>
 ai_status_write() {
