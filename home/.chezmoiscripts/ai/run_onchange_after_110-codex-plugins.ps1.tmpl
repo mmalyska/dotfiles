@@ -1,0 +1,104 @@
+{{- $ai := includeTemplate "ai-profile.tmpl" . | fromJson -}}
+{{- $wf := .ai_workflow -}}
+{{- $own := $wf.marketplace.own -}}
+{{- $profile := index $wf.profiles $ai.profile -}}
+{{- $plugins := index $wf.plugins $profile.own_set -}}
+{{- $codex := true -}}
+{{- if hasKey . "ai_codex" }}{{ $codex = .ai_codex }}{{ end -}}
+# profile={{ $ai.profile }} codex={{ $codex }} sha={{ $own.accepted_sha }} cli={{ if lookPath "codex" }}present{{ else }}absent{{ end }} plugins={{ join "," $plugins }}
+# Installs the Codex plugins of the AI profile from the marketplace pinned to the accepted SHA. Never fails the apply
+# (WARN + status file instead) and only ever adds things, nothing is taken away. Claude-only extras are never installed here.
+# Rerun after a failure: see docs/plans/hybrid-ai-workflow-dotfiles/plan.md (D-C1).
+$ErrorActionPreference = 'Continue'
+
+{{ template "ai-lib.ps1" . }}
+
+$script:AiAcceptedSha = {{ $own.accepted_sha | squote }}
+$Enabled = {{ $codex | squote }} -eq 'true'
+$OwnName = {{ $own.name | squote }}
+$OwnRepo = {{ $own.repo | squote }}
+$Plugins = @({{ join " " $plugins | squote }} -split ' ' | Where-Object { $_ })
+
+# Get-CodexIds <list|marketplace>: installed plugin ids / configured marketplace names
+function Get-CodexIds {
+    param([string]$Kind)
+    try {
+        if ($Kind -eq 'list') {
+            $out = & codex plugin list --json 2>$null
+            if ($global:LASTEXITCODE -ne 0) { return @() }
+            return @(Get-AiJsonItems $out 'installed' | ForEach-Object { $_.pluginId })
+        }
+        $out = & codex plugin marketplace list --json 2>$null
+        if ($global:LASTEXITCODE -ne 0) { return @() }
+        return @(Get-AiJsonItems $out 'marketplaces' | ForEach-Object { $_.name })
+    } catch {
+        return @()
+    }
+}
+
+# Get-CodexConfiguredRef <marketplace>: the pinned ref of a marketplace in config.toml, empty when unknown
+function Get-CodexConfiguredRef {
+    param([string]$Name)
+    $codexHome = $env:CODEX_HOME
+    if (-not $codexHome) { $codexHome = Join-Path $HOME '.codex' }
+    $cfg = Join-Path $codexHome 'config.toml'
+    if (-not (Test-Path -LiteralPath $cfg)) { return '' }
+    $inSection = $false
+    foreach ($line in (Get-Content -LiteralPath $cfg)) {
+        if ($line -match '^\[') {
+            $inSection = ($line.Trim() -ceq "[marketplaces.$Name]")
+        } elseif ($inSection -and $line -match '^\s*ref\s*=\s*"([^"]*)"') {
+            return $Matches[1]
+        }
+    }
+    return ''
+}
+
+# Confirm-CodexMarketplace: add pinned to the accepted SHA when missing. An existing one is never replaced; a different ref is a WARN.
+# Returns $false when the marketplace is unusable, so the plugins that depend on it are not attempted.
+function Confirm-CodexMarketplace {
+    $before = $script:AiFails
+    if (Get-CodexIds 'marketplace' | Where-Object { $_ -ceq $OwnName }) {
+        Write-AiLog 'INFO' "marketplace $OwnName already configured"
+        $ref = Get-CodexConfiguredRef $OwnName
+        if ($ref -cne $script:AiAcceptedSha) {
+            $shown = $ref
+            if (-not $shown) { $shown = 'none' }
+            Write-AiLog 'WARN' "pin mismatch: $OwnName is at ref '$shown', accepted $($script:AiAcceptedSha) (not changed)"
+        }
+    } else {
+        Invoke-AiSoft "marketplace add $OwnRepo" { codex plugin marketplace add $OwnRepo --ref $script:AiAcceptedSha }
+    }
+    return ($script:AiFails -eq $before)
+}
+
+# Install-CodexMissing <plugin...>
+function Install-CodexMissing {
+    param([string[]]$Names)
+    $have = @(Get-CodexIds 'list')
+    foreach ($p in $Names) {
+        $id = "$p@$OwnName"
+        if ($have -ccontains $id) {
+            Write-AiLog 'INFO' "$id already installed"
+        } else {
+            Invoke-AiSoft "plugin add $id" { codex plugin add $id }
+        }
+    }
+}
+
+function Invoke-Main {
+    if (-not $Enabled) {
+        Write-AiLog 'SKIP' 'ai_codex=false'
+    } elseif (-not (Test-AiCommand 'codex')) {
+        Write-AiLog 'SKIP' 'codex CLI not found'
+    } else {
+        if (Confirm-CodexMarketplace) {
+            Install-CodexMissing $Plugins
+        } else {
+            Write-AiLog 'WARN' "skipping $OwnName plugins: marketplace unavailable"
+        }
+    }
+    Invoke-AiSummary 'codex'
+}
+Invoke-Main
+exit 0

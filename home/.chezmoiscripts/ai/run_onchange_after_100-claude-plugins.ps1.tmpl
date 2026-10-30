@@ -1,0 +1,102 @@
+{{- $ai := includeTemplate "ai-profile.tmpl" . | fromJson -}}
+{{- $wf := .ai_workflow -}}
+{{- $own := $wf.marketplace.own -}}
+{{- $official := $wf.marketplace.official -}}
+{{- $profile := index $wf.profiles $ai.profile -}}
+{{- $plugins := index $wf.plugins $profile.own_set -}}
+{{- $extras := list -}}
+{{- if $profile.extras }}{{ $extras = $wf.plugins.claude_extras }}{{ end -}}
+{{- $claude := true -}}
+{{- if hasKey . "ai_claude" }}{{ $claude = .ai_claude }}{{ end -}}
+# profile={{ $ai.profile }} claude={{ $claude }} sha={{ $own.accepted_sha }} cli={{ if lookPath "claude" }}present{{ else }}absent{{ end }} plugins={{ join "," $plugins }} extras={{ join "," $extras }}
+# Installs the Claude Code plugins of the AI profile. Never fails the apply (WARN + status file instead) and only ever
+# adds things, nothing is taken away. Rerun after a failure: see docs/plans/hybrid-ai-workflow-dotfiles/plan.md (D-C1).
+$ErrorActionPreference = 'Continue'
+
+{{ template "ai-lib.ps1" . }}
+
+$script:AiAcceptedSha = {{ $own.accepted_sha | squote }}
+$Enabled = {{ $claude | squote }} -eq 'true'
+$OwnName = {{ $own.name | squote }}
+$OwnRepo = {{ $own.repo | squote }}
+$OfficialName = {{ $official.name | squote }}
+$OfficialRepo = {{ $official.repo | squote }}
+$Plugins = @({{ join " " $plugins | squote }} -split ' ' | Where-Object { $_ })
+$Extras = @({{ join " " $extras | squote }} -split ' ' | Where-Object { $_ })
+
+# Get-ClaudeIds <list|marketplace>: installed plugin ids / configured marketplace names
+function Get-ClaudeIds {
+    param([string]$Kind)
+    try {
+        if ($Kind -eq 'list') {
+            $out = & claude plugin list --json 2>$null
+            if ($global:LASTEXITCODE -ne 0) { return @() }
+            return @(Get-AiJsonItems $out 'installed' | ForEach-Object { $_.id })
+        }
+        $out = & claude plugin marketplace list --json 2>$null
+        if ($global:LASTEXITCODE -ne 0) { return @() }
+        return @(Get-AiJsonItems $out 'marketplaces' | ForEach-Object { $_.name })
+    } catch {
+        return @()
+    }
+}
+
+# Confirm-ClaudeMarketplace <name> <repo>: add when missing, update only on an explicit upgrade.
+# Returns $false when the marketplace is unusable, so the plugins that depend on it are not attempted.
+function Confirm-ClaudeMarketplace {
+    param([string]$Name, [string]$Repo)
+    $before = $script:AiFails
+    if (Get-ClaudeIds 'marketplace' | Where-Object { $_ -ceq $Name }) {
+        Write-AiLog 'INFO' "marketplace $Name already configured"
+    } else {
+        Invoke-AiSoft "marketplace add $Repo" { claude plugin marketplace add $Repo }
+    }
+    if ($env:AI_WORKFLOW_UPGRADE -eq '1') {
+        Invoke-AiSoft "marketplace update $Name" { claude plugin marketplace update $Name }
+    }
+    return ($script:AiFails -eq $before)
+}
+
+# Install-ClaudeMissing <marketplace> <plugin...>
+function Install-ClaudeMissing {
+    param([string]$Marketplace, [string[]]$Names)
+    $have = @(Get-ClaudeIds 'list')
+    foreach ($p in $Names) {
+        $id = "$p@$Marketplace"
+        if ($have -ccontains $id) {
+            Write-AiLog 'INFO' "$id already installed"
+        } else {
+            Invoke-AiSoft "install $id" { claude plugin install $id }
+        }
+    }
+}
+
+function Invoke-Main {
+    if (-not $Enabled) {
+        Write-AiLog 'SKIP' 'ai_claude=false'
+    } elseif (-not (Test-AiCommand 'claude')) {
+        Write-AiLog 'SKIP' 'claude CLI not found'
+    } else {
+        if (Confirm-ClaudeMarketplace $OwnName $OwnRepo) {
+            $configDir = $env:CLAUDE_CONFIG_DIR
+            if (-not $configDir) { $configDir = Join-Path $HOME '.claude' }
+            $head = Get-AiMarketplaceHead (Join-Path $configDir "plugins/marketplaces/$OwnName")
+            if ($head -and $head -ne $script:AiAcceptedSha) {
+                Write-AiLog 'WARN' "drift: $OwnName is at $head, accepted $($script:AiAcceptedSha)"
+            }
+            Install-ClaudeMissing $OwnName $Plugins
+        } else {
+            Write-AiLog 'WARN' "skipping $OwnName plugins: marketplace unavailable"
+        }
+        if ($Extras.Count -gt 0) {
+            if (Confirm-ClaudeMarketplace $OfficialName $OfficialRepo) {
+                Install-ClaudeMissing $OfficialName $Extras
+            } else {
+                Write-AiLog 'WARN' "skipping $OfficialName plugins: marketplace unavailable"
+            }
+        }
+    }
+    Invoke-AiSummary 'claude'
+}
+Invoke-Main
+exit 0
