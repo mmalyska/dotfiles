@@ -140,6 +140,7 @@ report codex "$USE_CODEX" 110-codex-plugins.sh
 echo
 echo "[opencode] $(flag "$USE_OPENCODE")"
 if have opencode; then echo "  CLI: $(version opencode)"; else echo "  CLI: ABSENT"; fi
+if [ "$USE_OPENCODE" = true ]; then echo "  spike not implemented: nothing is installed or configured for OpenCode (docs/workflow/opencode-spike.md)"; fi
 echo
 if [ "$BAD" = 1 ]; then echo "result: PROBLEMS FOUND"; else echo "result: OK"; fi
 if [ "$STRICT" = 1 ] && [ "$BAD" = 1 ]; then exit 1; fi

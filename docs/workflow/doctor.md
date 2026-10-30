@@ -20,3 +20,6 @@ chezmoi apply
 ```
 
 Only that script runs again. Do not use `delete-bucket` or `state reset`. Nothing is retried automatically.
+
+With `ai_opencode=true` the report adds one informational line, `spike not implemented`; OpenCode is experimental, nothing is
+installed for it and it never affects `--strict` ([opencode-spike.md](opencode-spike.md)).
