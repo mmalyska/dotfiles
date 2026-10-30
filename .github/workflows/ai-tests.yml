@@ -37,7 +37,7 @@ jobs:
           chezmoi --version
           shellcheck --version
       - name: shellcheck
-        run: shellcheck -x tests/ai/*.sh tests/ai/stubs/*
+        run: shellcheck -x tests/ai/*.sh tests/ai/stubs/* docs/workflow/backup.sh
       - name: Tests
         run: bash tests/ai/run.sh
       - name: Working tree must stay clean
@@ -80,7 +80,7 @@ jobs:
           command -v shellcheck || brew install shellcheck
           shellcheck --version
       - name: shellcheck
-        run: shellcheck -x tests/ai/*.sh tests/ai/stubs/*
+        run: shellcheck -x tests/ai/*.sh tests/ai/stubs/* docs/workflow/backup.sh
       - name: Tests
         run: bash tests/ai/run.sh
       - name: Working tree must stay clean

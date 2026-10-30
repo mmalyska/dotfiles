@@ -2,7 +2,7 @@
 
 Acceptance record for the revision of `mmalyska/claude-plugins` that `dotfiles` installs.
 The workflow contract (lifecycle, profiles, topologies) lives in `claude-plugins`;
-`dotfiles` only distributes it. Upgrade procedure: `upgrade-runbook.md` (added in a later PR).
+`dotfiles` only distributes it. Upgrade procedure: [upgrade-runbook.md](upgrade-runbook.md).
 
 | Field | Value |
 | --- | --- |
