@@ -1,14 +1,20 @@
 {{- if eq .chezmoi.os "windows" }}
 .chezmoiscripts/linux/*
 .chezmoiscripts/macos/*
+.chezmoiscripts/ai/100-claude-plugins.sh
+.chezmoiscripts/ai/110-codex-plugins.sh
 .zprofile
 {{- else if eq .chezmoi.os "linux" }}
 .chezmoiscripts/windows/*
 .chezmoiscripts/macos/*
+.chezmoiscripts/ai/100-claude-plugins.ps1
+.chezmoiscripts/ai/110-codex-plugins.ps1
 .zprofile
 {{- else if eq .chezmoi.os "darwin" }}
 .chezmoiscripts/windows/*
 .chezmoiscripts/linux/*
+.chezmoiscripts/ai/100-claude-plugins.ps1
+.chezmoiscripts/ai/110-codex-plugins.ps1
 {{- end }}
 {{- if .is_devcontainer }}
 .chezmoiscripts/linux/*

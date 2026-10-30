@@ -17,6 +17,7 @@ jobs:
   linux:
     runs-on: ubuntu-latest
     env:
+      AI_REQUIRE_PWSH: "1"
       # renovate: datasource=github-releases depName=twpayne/chezmoi
       CHEZMOI_VERSION: v2.73.1
       CHEZMOI_SHA256: a3f958acb7d0e5d53fa43c2eec9bc8ae3b4fba8bcbfdce29a8881ca3ffc20a53
@@ -39,5 +40,85 @@ jobs:
         run: shellcheck -x tests/ai/*.sh tests/ai/stubs/*
       - name: Tests
         run: bash tests/ai/run.sh
+      - name: Working tree must stay clean
+        run: test -z "$(git status --porcelain)"
+
+  macos:
+    runs-on: macos-latest
+    env:
+      AI_REQUIRE_PWSH: "1"
+      # renovate: datasource=github-releases depName=twpayne/chezmoi
+      CHEZMOI_VERSION: v2.73.1
+      CHEZMOI_SHA256_ARM64: 19a8d9778d90476cc2f0463be69e9d82e2b91ba7b2361dbfc5348f243b1ba731
+      CHEZMOI_SHA256_AMD64: 0ec1869c60752644863bc4690878a290455f0d35c6e9b200ca4a822b35d2be54
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install chezmoi
+        run: |
+          set -euo pipefail
+          case "$(uname -m)" in
+            arm64) arch=arm64; sha="$CHEZMOI_SHA256_ARM64";;
+            x86_64) arch=amd64; sha="$CHEZMOI_SHA256_AMD64";;
+            *) echo "unsupported arch $(uname -m)" >&2; exit 1;;
+          esac
+          f="chezmoi_${CHEZMOI_VERSION#v}_darwin_${arch}.tar.gz"
+          curl -fsSL -o "$RUNNER_TEMP/$f" "https://github.com/twpayne/chezmoi/releases/download/${CHEZMOI_VERSION}/$f"
+          echo "$sha  $RUNNER_TEMP/$f" | shasum -a 256 -c -
+          mkdir -p "$RUNNER_TEMP/bin"
+          tar -xzf "$RUNNER_TEMP/$f" -C "$RUNNER_TEMP/bin" chezmoi
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+      - name: GNU coreutils and findutils for the test harness (timeout, sha256sum, find -printf)
+        run: |
+          set -euo pipefail
+          brew install coreutils findutils
+          echo "$(brew --prefix coreutils)/libexec/gnubin" >> "$GITHUB_PATH"
+          echo "$(brew --prefix findutils)/libexec/gnubin" >> "$GITHUB_PATH"
+      - name: Versions
+        run: |
+          chezmoi --version
+          pwsh --version
+          command -v shellcheck || brew install shellcheck
+          shellcheck --version
+      - name: shellcheck
+        run: shellcheck -x tests/ai/*.sh tests/ai/stubs/*
+      - name: Tests
+        run: bash tests/ai/run.sh
+      - name: Working tree must stay clean
+        run: test -z "$(git status --porcelain)"
+
+  windows:
+    runs-on: windows-latest
+    env:
+      AI_REQUIRE_PWSH: "1"
+      # renovate: datasource=github-releases depName=twpayne/chezmoi
+      CHEZMOI_VERSION: v2.73.1
+      CHEZMOI_SHA256: 29c48a8d403f590cfacf16fbf9db3c2dc0a8ebe8b744db64bac6057c0266c65d
+    defaults:
+      run:
+        shell: bash
+    steps:
+      # LF endings: the ignore/ps1 templates are compared and rendered as checked in
+      - name: Keep LF line endings
+        run: git config --global core.autocrlf false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install chezmoi
+        shell: pwsh
+        run: |
+          $f = "chezmoi_$($env:CHEZMOI_VERSION.TrimStart('v'))_windows_amd64.zip"
+          $zip = Join-Path $env:RUNNER_TEMP $f
+          Invoke-WebRequest -Uri "https://github.com/twpayne/chezmoi/releases/download/$($env:CHEZMOI_VERSION)/$f" -OutFile $zip
+          if ((Get-FileHash -Algorithm SHA256 -Path $zip).Hash.ToLower() -ne $env:CHEZMOI_SHA256) { throw "chezmoi checksum mismatch" }
+          $dir = Join-Path $env:RUNNER_TEMP 'bin'
+          Expand-Archive -Path $zip -DestinationPath $dir -Force
+          Add-Content -Path $env:GITHUB_PATH -Value $dir
+      - name: Versions
+        run: |
+          chezmoi --version
+          pwsh --version
+          pwsh -NoProfile -Command '(Get-Module -ListAvailable Pester | Select-Object -First 1).Version.ToString()'
+      - name: Ignore matrix (.chezmoiignore per OS and devcontainer)
+        run: bash tests/ai/test_ignore.sh
+      - name: PowerShell installers (parse-check and Pester)
+        run: bash tests/ai/test_pwsh.sh
       - name: Working tree must stay clean
         run: test -z "$(git status --porcelain)"
