@@ -1,0 +1,96 @@
+{{- $ai := includeTemplate "ai-profile.tmpl" . | fromJson -}}
+{{- $wf := .ai_workflow -}}
+{{- $own := $wf.marketplace.own -}}
+{{- $official := $wf.marketplace.official -}}
+{{- $profile := index $wf.profiles $ai.profile -}}
+{{- $plugins := index $wf.plugins $profile.own_set -}}
+{{- $extras := list -}}
+{{- if $profile.extras }}{{ $extras = $wf.plugins.claude_extras }}{{ end -}}
+{{- $claude := true -}}
+{{- if hasKey . "ai_claude" }}{{ $claude = .ai_claude }}{{ end -}}
+#!/usr/bin/env bash
+# profile={{ $ai.profile }} claude={{ $claude }} sha={{ $own.accepted_sha }} cli={{ if lookPath "claude" }}present{{ else }}absent{{ end }} plugins={{ join "," $plugins }} extras={{ join "," $extras }}
+# Installs the Claude Code plugins of the AI profile. Never fails the apply (WARN + status file instead) and only ever
+# adds things, nothing is taken away. Rerun after a failure: see docs/plans/hybrid-ai-workflow-dotfiles/plan.md (D-C1).
+set -euo pipefail
+
+{{ template "ai-lib.sh" . }}
+
+AI_ACCEPTED_SHA={{ $own.accepted_sha | quote }}
+ENABLED={{ $claude }}
+OWN_NAME={{ $own.name | quote }}
+OWN_REPO={{ $own.repo | quote }}
+OFFICIAL_NAME={{ $official.name | quote }}
+OFFICIAL_REPO={{ $official.repo | quote }}
+PLUGINS={{ join " " $plugins | quote }}
+EXTRAS={{ join " " $extras | quote }}
+
+# claude_ids <list|marketplace>: installed plugin ids / configured marketplace names, one per line
+claude_ids() {
+    local out
+    if [ "$1" = list ]; then
+        out=$(claude plugin list --json 2>/dev/null) || return 0
+        printf '%s\n' "$out" | sed -n 's/.*"id": *"\([^"]*\)".*/\1/p'
+    else
+        out=$(claude plugin marketplace list --json 2>/dev/null) || return 0
+        printf '%s\n' "$out" | sed -n 's/^ *"name": *"\([^"]*\)".*/\1/p'
+    fi
+}
+
+# ensure_marketplace <name> <repo>: add when missing, update only on an explicit upgrade.
+# Returns non-zero when the marketplace is unusable, so the plugins that depend on it are not attempted.
+ensure_marketplace() {
+    local before=$AI_FAILS
+    if claude_ids marketplace | grep -qxF "$1"; then
+        ai_log INFO "marketplace $1 already configured"
+    else
+        ai_soft "marketplace add $2" -- claude plugin marketplace add "$2"
+    fi
+    if [ "${AI_WORKFLOW_UPGRADE:-}" = 1 ]; then
+        ai_soft "marketplace update $1" -- claude plugin marketplace update "$1"
+    fi
+    [ "$AI_FAILS" = "$before" ]
+}
+
+# install_missing <marketplace> <plugin...>
+install_missing() {
+    local m=$1 p have
+    shift
+    have=$(claude_ids list)
+    for p in "$@"; do
+        if printf '%s\n' "$have" | grep -qxF "$p@$m"; then
+            ai_log INFO "$p@$m already installed"
+        else
+            ai_soft "install $p@$m" -- claude plugin install "$p@$m"
+        fi
+    done
+}
+
+main() {
+    if [ "$ENABLED" != true ]; then
+        ai_log SKIP "ai_claude=false"
+    elif ! ai_have claude; then
+        ai_log SKIP "claude CLI not found"
+    else
+        if ensure_marketplace "$OWN_NAME" "$OWN_REPO"; then
+            head=$(ai_marketplace_head "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/plugins/marketplaces/$OWN_NAME")
+            if [ -n "$head" ] && [ "$head" != "$AI_ACCEPTED_SHA" ]; then
+                ai_log WARN "drift: $OWN_NAME is at $head, accepted $AI_ACCEPTED_SHA"
+            fi
+            # shellcheck disable=SC2086  # PLUGINS is a space-separated list of plugin names
+            install_missing "$OWN_NAME" $PLUGINS
+        else
+            ai_log WARN "skipping $OWN_NAME plugins: marketplace unavailable"
+        fi
+        if [ -n "$EXTRAS" ]; then
+            if ensure_marketplace "$OFFICIAL_NAME" "$OFFICIAL_REPO"; then
+                # shellcheck disable=SC2086  # EXTRAS is a space-separated list of plugin names
+                install_missing "$OFFICIAL_NAME" $EXTRAS
+            else
+                ai_log WARN "skipping $OFFICIAL_NAME plugins: marketplace unavailable"
+            fi
+        fi
+    fi
+    ai_summary claude
+}
+main

@@ -72,3 +72,36 @@ d = tomllib.load(open(sys.argv[1], "rb"))["data"]
 v = d[sys.argv[2]]
 print(str(v).lower() if isinstance(v, bool) else v)' "$1" "$2"
 }
+
+# ---- installer helpers (stub CLIs). Callers set T (new_tmp) first. ----
+STUBS="$AI_ROOT/tests/ai/stubs"
+CHEZMOI=$(command -v chezmoi)
+BASE_PATH=/usr/bin:/bin
+OWN=mmalyska-claude-plugins
+OFFICIAL=claude-plugins-official
+SHA=25d785abee26ca7a3c87e8311f46e8a90f225301
+CLAUDE_TPL=home/.chezmoiscripts/ai/run_onchange_after_100-claude-plugins.sh.tmpl
+# render_script <fixture> <path> -> file with the rendered installer
+render_script() {
+    PATH=$2 "$CHEZMOI" --source "$AI_ROOT" --config "$FIXTURES/$1.toml" execute-template < "$AI_ROOT/$CLAUDE_TPL" > "$T/$1.sh"
+    echo "$T/$1.sh"
+}
+OWN_IDS=(personal-essentials git-workflows development-lifecycle dotnet frontend backend devops security agent-toolkit renovate devcontainer android)
+EXTRA_IDS=(superpowers code-simplifier context7 claude-md-management)
+# write_state <file> <plugin@marketplace...>: `claude plugin list --json` shaped state
+write_state() {
+    local f=$1 first=1 id; shift
+    { echo "["; for id in "$@"; do [ $first = 1 ] || echo ","; first=0; printf '  {"id": "%s", "scope": "user", "enabled": true}' "$id"; done; echo; echo "]"; } > "$f"
+}
+write_marketplaces() { # file name...
+    local f=$1 first=1 n; shift
+    { echo "["; for n in "$@"; do [ $first = 1 ] || echo ","; first=0; printf '  {\n    "name": "%s",\n    "source": "github"\n  }' "$n"; done; echo; echo "]"; } > "$f"
+}
+# run_installer <script> [VAR=value...]: runs with stubs on PATH, fresh HOME, log in $LOG; sets RC and OUT
+run_installer() {
+    local script=$1; shift
+    HOMEDIR="$T/home.$RANDOM"; LOG="$T/calls.$RANDOM.log"; : > "$LOG"
+    OUT=$(env -u XDG_STATE_HOME -u CLAUDE_CONFIG_DIR HOME="$HOMEDIR" PATH="$STUBS:$BASE_PATH" AI_TEST_LOG="$LOG" "$@" bash "$script" 2>&1)
+    RC=$?
+}
+status_of() { cat "$HOMEDIR/.local/state/ai-workflow/claude.status"; }

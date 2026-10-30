@@ -1,0 +1,12 @@
+[data]
+    email = "test@example.invalid"
+    user = "Test User"
+    is_work = false
+    is_wsl = false
+    is_arch = true
+    is_devcontainer = false
+    ai_profile = "core"
+    ai_agent_teams = false
+    ai_claude = false
+    ai_codex = true
+    ai_opencode = false

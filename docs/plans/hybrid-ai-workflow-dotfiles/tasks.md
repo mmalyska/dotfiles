@@ -146,12 +146,12 @@ Windows i macOS: **poza PR-1** (dochodzą z instalatorami, T10).
 
 **Pliki:** Create `home/.chezmoiscripts/ai/run_onchange_after_100-claude-plugins.sh.tmpl`; Create `tests/ai/test_claude_installer.sh`; Create `docs/workflow/evidence/T06-claude-cli.md` (kroki 1–2).
 
-- [ ] **Krok 1 (weryfikacja CLI, evidence):** `claude plugin list --help`, `claude plugin install --help`, `claude plugin marketplace list --json` — potwierdzić `--json` i format; w izolowanym `CLAUDE_CONFIG_DIR` (poza `/tmp`) zainstalować ten sam plugin dwa razy i zapisać kody wyjścia (czy `install` jest idempotentne). Nie zakładać wyniku.
-- [ ] **Krok 2 (spike S1 — pin tagiem, timebox 30 min, tylko evidence, bez zmian w GitHub):** w scratchpadzie utworzyć **lokalny** klon `claude-plugins` na `25d785a` z **lokalnym** tagiem `ai-workflow-v0.1.0-preview.1`
+- [x] **Krok 1 (weryfikacja CLI, evidence):** `claude plugin list --help`, `claude plugin install --help`, `claude plugin marketplace list --json` — potwierdzić `--json` i format; w izolowanym `CLAUDE_CONFIG_DIR` (poza `/tmp`) zainstalować ten sam plugin dwa razy i zapisać kody wyjścia (czy `install` jest idempotentne). Nie zakładać wyniku.
+- [x] **Krok 2 (spike S1 — pin tagiem, timebox 30 min, tylko evidence, bez zmian w GitHub):** w scratchpadzie utworzyć **lokalny** klon `claude-plugins` na `25d785a` z **lokalnym** tagiem `ai-workflow-v0.1.0-preview.1`
   (bez `git push`), po czym w izolowanych `CLAUDE_CONFIG_DIR`: (a) `claude plugin marketplace add "file://<klon>#ai-workflow-v0.1.0-preview.1"` (lub równoważna forma git-URL) — czy działa i czy `git rev-parse HEAD` w katalogu marketplace == `25d785a…`;
   (b) wpis `extraKnownMarketplaces.<m>.source` z `ref` = tag (`source: git`/`github`) + `marketplace add` z tym samym źródłem — czy `ref` jest respektowany; (c) czy `claude plugin marketplace update` zostaje na tagu czy przesuwa się do HEAD gałęzi;
   (d) kontrola negatywna: SHA jako ref (już zmierzone: odrzucone). Wynik **rozstrzyga**: tag działa w (a)+(b)+(c) ⇒ T14 może przełączyć `pin_mode` na `tag`; w przeciwnym razie `pin_mode: verify` zostaje na stałe, a tag służy tylko Codex i jako etykieta. Zapisać też, czy forma GitHub `owner/repo#tag` różni się od `file://` (nie przesądzać — dodatkowa weryfikacja po utworzeniu prawdziwego tagu, T14).
-- [ ] **Krok 3 (implementacja):** skrypt `.sh.tmpl` z odciskiem na górze (`# profile={{…}} claude={{ .ai_claude }} sha={{ accepted_sha }} cli={{ if lookPath "claude" }}present{{ else }}absent{{ end }} plugins={{ lista zestawu profilu }}`). Logika:
+- [x] **Krok 3 (implementacja):** skrypt `.sh.tmpl` z odciskiem na górze (`# profile={{…}} claude={{ .ai_claude }} sha={{ accepted_sha }} cli={{ if lookPath "claude" }}present{{ else }}absent{{ end }} plugins={{ lista zestawu profilu }}`). Logika:
   1. `ai_claude=false` → `SKIP`, exit 0;
   2. `! ai_have claude` → `SKIP claude CLI not found`, exit 0;
   3. marketplace własny: `claude plugin marketplace add <repo z danych>` tylko jeśli brak w `marketplace list --json`; **bez** `marketplace update`, chyba że `AI_WORKFLOW_UPGRADE=1`;
