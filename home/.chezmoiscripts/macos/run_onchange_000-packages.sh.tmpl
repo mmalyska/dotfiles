@@ -9,6 +9,9 @@ brew update
 # Common
 brew install --cask claude
 brew install --cask claude-code
+{{ if or (not (hasKey . "ai_codex")) .ai_codex -}}
+brew install --cask codex
+{{ end -}}
 brew install gh ghostty
 brew install --cask visual-studio-code
 brew install PeonPing/tap/peon-ping && peon-ping-setup --packs=peon
