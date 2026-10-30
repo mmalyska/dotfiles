@@ -31,6 +31,18 @@ BeforeAll {
         return '[' + $items + ']'
     }
 
+    # Remove-StubFunction <name>: removes a stub function wherever it lives, and fails loudly if it is still resolvable
+    function script:Remove-StubFunction {
+        param([string]$Name)
+        foreach ($path in "Function:global:$Name", "Function:\$Name", "Function:$Name") {
+            if (Get-Command $Name -CommandType Function -ErrorAction SilentlyContinue) {
+                Remove-Item -Path $path -Force -ErrorAction SilentlyContinue
+            }
+        }
+        $left = Get-Command $Name -CommandType Function -ErrorAction SilentlyContinue
+        if ($left) { throw "stub '$Name' is still resolvable ($($left.CommandType): $($left.Source))" }
+    }
+
     # Count-Calls <regex>
     function script:Count-Calls {
         param([string]$Pattern)
@@ -75,7 +87,7 @@ Describe 'Claude installer (100-claude-plugins.ps1)' {
         }
     }
     AfterEach {
-        Remove-Item function:global:claude -ErrorAction SilentlyContinue
+        Remove-StubFunction 'claude'
         $env:XDG_STATE_HOME = $script:SavedEnv.XDG
         $env:CLAUDE_CONFIG_DIR = $script:SavedEnv.CC
         $env:AI_WORKFLOW_UPGRADE = $script:SavedEnv.UP
@@ -174,7 +186,7 @@ Describe 'Claude installer (100-claude-plugins.ps1)' {
 
     It 'without the claude CLI: SKIP, no calls, status skipped' {
         $s = Render-Installer 'core-linux' $script:ClaudeTpl
-        Remove-Item function:global:claude
+        Remove-StubFunction 'claude'
         $env:PATH = Join-Path $script:Case 'empty'
         $out = Run-Installer $s
         $global:AiRc | Should -Be 0
@@ -239,7 +251,7 @@ Describe 'Codex installer (110-codex-plugins.ps1)' {
         }
     }
     AfterEach {
-        Remove-Item function:global:codex -ErrorAction SilentlyContinue
+        Remove-StubFunction 'codex'
         $env:XDG_STATE_HOME = $script:SavedEnv.XDG
         $env:CODEX_HOME = $script:SavedEnv.CH
         $env:PATH = $script:SavedEnv.PATH
@@ -318,7 +330,7 @@ Describe 'Codex installer (110-codex-plugins.ps1)' {
 
     It 'without the codex CLI: SKIP, no calls, status skipped' {
         $s = Render-Installer 'core-linux' $script:CodexTpl
-        Remove-Item function:global:codex
+        Remove-StubFunction 'codex'
         $env:PATH = Join-Path $script:Case 'empty'
         $out = Run-Installer $s
         $out | Should -Match 'SKIP codex CLI not found'
