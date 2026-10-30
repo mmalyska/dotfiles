@@ -1,6 +1,13 @@
+{{- $ai := includeTemplate "ai-profile.tmpl" . | fromJson -}}
+{{- $wf := .ai_workflow -}}
+{{- $prof := get $wf.profiles $ai.profile -}}
+{{- $own := get $wf.plugins $prof.own_set -}}
+{{- $off := $wf.marketplace.official -}}
 {
   "env": {
+{{- if $ai.agent_teams }}
     "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1",
+{{- end }}
     "MAX_THINKING_TOKENS": "10000",
     "CLAUDE_AUTOCOMPACT_PCT_OVERRIDE": "70"
   },
@@ -157,38 +164,30 @@
     "padding": 0
   },
   "enabledPlugins": {
-    "superpowers@claude-plugins-official": true,
-    "code-simplifier@claude-plugins-official": true,
-    "context7@claude-plugins-official": true,
-    "claude-md-management@claude-plugins-official": true,
-    "personal-essentials@mmalyska-claude-plugins": true,
-    "git-workflows@mmalyska-claude-plugins": true,
-    "development-lifecycle@mmalyska-claude-plugins": true,
-    "dotnet@mmalyska-claude-plugins": true,
-    "frontend@mmalyska-claude-plugins": true,
-    "backend@mmalyska-claude-plugins": true,
-    "devops@mmalyska-claude-plugins": true,
-    "security@mmalyska-claude-plugins": true,
-    "agent-toolkit@mmalyska-claude-plugins": true,
-    "renovate@mmalyska-claude-plugins": true,
-    "devcontainer@mmalyska-claude-plugins": true,
-    "android@mmalyska-claude-plugins": true
+{{- $entries := list }}
+{{- if $prof.extras }}{{ range $wf.plugins.claude_extras }}{{ $entries = append $entries (printf "%s@%s" . $off.name) }}{{ end }}{{ end }}
+{{- range $own }}{{ $entries = append $entries (printf "%s@%s" . $wf.marketplace.own.name) }}{{ end }}
+{{- range $i, $e := $entries }}
+    {{ $e | quote }}: true{{ if lt (add1 $i) (len $entries) }},{{ end }}
+{{- end }}
   },
   "alwaysThinkingEnabled": true,
   "preferences": {
     "tmuxSplitPanes": true
   },
   "extraKnownMarketplaces": {
-    "claude-plugins-official": {
+{{- if $prof.extras }}
+    {{ $off.name | quote }}: {
       "source": {
         "source": "github",
-        "repo": "anthropics/claude-plugins-official"
+        "repo": {{ $off.repo | quote }}
       }
     },
-    "mmalyska-claude-plugins": {
+{{- end }}
+    {{ $wf.marketplace.own.name | quote }}: {
       "source": {
         "source": "github",
-        "repo": "mmalyska/claude-plugins"
+        "repo": {{ $wf.marketplace.own.repo | quote }}
       }
     }
   }
