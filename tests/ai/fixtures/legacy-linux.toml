@@ -1,0 +1,7 @@
+[data]
+    email = "test@example.invalid"
+    user = "Test User"
+    is_work = false
+    is_wsl = false
+    is_arch = true
+    is_devcontainer = false
