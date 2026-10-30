@@ -1,0 +1,89 @@
+{{- $ai := includeTemplate "ai-profile.tmpl" . | fromJson -}}
+{{- $wf := .ai_workflow -}}
+{{- $own := $wf.marketplace.own -}}
+{{- $profile := index $wf.profiles $ai.profile -}}
+{{- $plugins := index $wf.plugins $profile.own_set -}}
+{{- $codex := true -}}
+{{- if hasKey . "ai_codex" }}{{ $codex = .ai_codex }}{{ end -}}
+#!/usr/bin/env bash
+# profile={{ $ai.profile }} codex={{ $codex }} sha={{ $own.accepted_sha }} cli={{ if lookPath "codex" }}present{{ else }}absent{{ end }} plugins={{ join "," $plugins }}
+# Installs the Codex plugins of the AI profile from the marketplace pinned to the accepted SHA. Never fails the apply
+# (WARN + status file instead) and only ever adds things, nothing is taken away. Claude-only extras are never installed here.
+# Rerun after a failure: see docs/plans/hybrid-ai-workflow-dotfiles/plan.md (D-C1).
+set -euo pipefail
+
+{{ template "ai-lib.sh" . }}
+
+AI_ACCEPTED_SHA={{ $own.accepted_sha | quote }}
+ENABLED={{ $codex }}
+OWN_NAME={{ $own.name | quote }}
+OWN_REPO={{ $own.repo | quote }}
+PLUGINS={{ join " " $plugins | quote }}
+
+# codex_ids <list|marketplace>: installed plugin ids / configured marketplace names, one per line
+codex_ids() {
+    local out
+    if [ "$1" = list ]; then
+        out=$(codex plugin list --json 2>/dev/null) || return 0
+        printf '%s\n' "$out" | sed -n 's/.*"pluginId": *"\([^"]*\)".*/\1/p'
+    else
+        out=$(codex plugin marketplace list --json 2>/dev/null) || return 0
+        printf '%s\n' "$out" | sed -n 's/^ *"name": *"\([^"]*\)".*/\1/p'
+    fi
+}
+
+# configured_ref <marketplace>: the pinned ref of a marketplace in config.toml, empty when unknown
+configured_ref() {
+    local cfg="${CODEX_HOME:-$HOME/.codex}/config.toml"
+    [ -r "$cfg" ] || return 0
+    awk -v sec="[marketplaces.$1]" '
+        /^\[/ { in_sec = ($0 == sec); next }
+        in_sec && $1 == "ref" { gsub(/^[^"]*"|"[^"]*$/, ""); print; exit }
+    ' "$cfg"
+}
+
+# ensure_marketplace: add pinned to the accepted SHA when missing. An existing one is never replaced; a different ref is a WARN.
+# Returns non-zero when the marketplace is unusable, so the plugins that depend on it are not attempted.
+ensure_marketplace() {
+    local before=$AI_FAILS ref
+    if codex_ids marketplace | grep -qxF "$OWN_NAME"; then
+        ai_log INFO "marketplace $OWN_NAME already configured"
+        ref=$(configured_ref "$OWN_NAME")
+        if [ "$ref" != "$AI_ACCEPTED_SHA" ]; then
+            ai_log WARN "pin mismatch: $OWN_NAME is at ref '${ref:-none}', accepted $AI_ACCEPTED_SHA (not changed)"
+        fi
+    else
+        ai_soft "marketplace add $OWN_REPO" -- codex plugin marketplace add "$OWN_REPO" --ref "$AI_ACCEPTED_SHA"
+    fi
+    [ "$AI_FAILS" = "$before" ]
+}
+
+# install_missing <plugin...>
+install_missing() {
+    local p have
+    have=$(codex_ids list)
+    for p in "$@"; do
+        if printf '%s\n' "$have" | grep -qxF "$p@$OWN_NAME"; then
+            ai_log INFO "$p@$OWN_NAME already installed"
+        else
+            ai_soft "plugin add $p@$OWN_NAME" -- codex plugin add "$p@$OWN_NAME"
+        fi
+    done
+}
+
+main() {
+    if [ "$ENABLED" != true ]; then
+        ai_log SKIP "ai_codex=false"
+    elif ! ai_have codex; then
+        ai_log SKIP "codex CLI not found"
+    else
+        if ensure_marketplace; then
+            # shellcheck disable=SC2086  # PLUGINS is a space-separated list of plugin names
+            install_missing $PLUGINS
+        else
+            ai_log WARN "skipping $OWN_NAME plugins: marketplace unavailable"
+        fi
+    fi
+    ai_summary codex
+}
+main
