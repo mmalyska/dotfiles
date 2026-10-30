@@ -1,0 +1,51 @@
+# Static data for the AI workflow adoption (see docs/plans/hybrid-ai-workflow-dotfiles/).
+# The workflow itself (lifecycle, profiles, topologies) is owned by mmalyska/claude-plugins;
+# this file only describes what dotfiles installs and which revision was accepted.
+ai_workflow:
+  marketplace:
+    own:
+      name: mmalyska-claude-plugins
+      repo: mmalyska/claude-plugins
+      # Accepted revision, see docs/workflow/acceptance.md. Codex pins it natively (--ref);
+      # Claude Code cannot pin a SHA, so it is verified (pin_mode: verify).
+      accepted_sha: 25d785abee26ca7a3c87e8311f46e8a90f225301
+      # Set only after the tag exists and Claude accepts it (plan T14).
+      accepted_tag: ""
+      pin_mode: verify
+    official:
+      name: claude-plugins-official
+      repo: anthropics/claude-plugins-official
+  plugins:
+    # Minimal set: canonical lifecycle + worktree-first.
+    workflow:
+      - git-workflows
+      - development-lifecycle
+    own:
+      - personal-essentials
+      - git-workflows
+      - development-lifecycle
+      - dotnet
+      - frontend
+      - backend
+      - devops
+      - security
+      - agent-toolkit
+      - renovate
+      - devcontainer
+      - android
+    # Optional Claude-only extras (claude-plugins-official).
+    claude_extras:
+      - superpowers
+      - code-simplifier
+      - context7
+      - claude-md-management
+  profiles:
+    minimal:
+      own_set: workflow
+      extras: false
+    core:
+      own_set: own
+      extras: false
+    claude-extended:
+      own_set: own
+      extras: true
