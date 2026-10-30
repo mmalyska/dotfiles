@@ -1,0 +1,22 @@
+{{- /*
+  Resolves the AI workflow profile at apply time and prints one JSON object:
+  {"profile":"<p>","fallback":<bool>,"agent_teams":<bool>}
+  Use: {{ $ai := includeTemplate "ai-profile.tmpl" . | fromJson }}
+  A missing ai_profile means the chezmoi config predates this feature (chezmoi init always writes the keys
+  explicitly), so the previous setup is kept: claude-extended with agent teams.
+  This does NOT distinguish new from existing hosts; that is done once, in .chezmoi.toml.tmpl.
+*/ -}}
+{{- $profile := "claude-extended" -}}
+{{- $fallback := true -}}
+{{- if hasKey . "ai_profile" -}}
+{{-   $profile = .ai_profile -}}
+{{-   $fallback = false -}}
+{{- end -}}
+{{- if not (has $profile (list "minimal" "core" "claude-extended")) -}}
+{{-   fail (printf "unknown ai_profile %q (expected minimal|core|claude-extended)" $profile) -}}
+{{- end -}}
+{{- $teams := $fallback -}}
+{{- if hasKey . "ai_agent_teams" -}}
+{{-   $teams = .ai_agent_teams -}}
+{{- end -}}
+{{- dict "profile" $profile "fallback" $fallback "agent_teams" $teams | toJson -}}
