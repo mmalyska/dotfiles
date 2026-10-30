@@ -53,7 +53,7 @@ Niepokryte wprost przez spec, a najbardziej prawdopodobne w użyciu (każdy ma t
 
 1. Istniejący host **bez** klucza `ai_profile`: (a) zwykły `chezmoi apply` nie może się wywrócić i daje dotychczasowy zestaw, (b) ponowny `chezmoi init`
    nie może po cichu przestawić go na `core` (T03, T04). Nowy host dostaje jawne `core` + `ai_agent_teams=false` (T03).
-2. `run_onchange_` oznaczony jako wykonany, gdy CLI nie było — po późniejszej instalacji CLI musi się uruchomić ponownie (T05, T06).
+2. `run_onchange_` oznaczony jako wykonany, gdy CLI nie było (odcisk z `lookPath` to rozwiązuje) **albo gdy operacja się nie powiodła** (exit 0 po `WARN`) — powtórka wymaga kontrolowanego, ręcznego resetu stanu jednego skryptu, nigdy `delete-bucket scriptState` (T05, T06, T08, T09, T13).
 3. `claude plugin marketplace add` z innym źródłem niż wpis `extraKnownMarketplaces` jest odrzucany (zmierzone) — zmiana
    źródła/refa w jednym miejscu bez drugiego psuje instalację (T06, T10).
 4. Windows dostaje dziś `run_once_install-claude-plugins.sh` (brak wpisu w `.chezmoiignore`) — apply nie może się wysypać (T10).
@@ -127,6 +127,8 @@ Plan implementuje (b) od razu (działa bez zmian w innym repo) i przechodzi na (
 | Flagi odpowiedzi | `--promptChoice "<tekst promptu>=<wartość>"`, `--promptBool "<tekst promptu>=<bool>"`; klucz = **tekst promptu** (np. `--promptChoice ai_profile=minimal` nie jest dopasowane: bez TTY kończy się błędem, z `--promptDefaults` daje domyślne `core`) |
 | `prompt*Once` przy istniejącym kluczu | zwraca zapisaną wartość i **ignoruje** flagę; zmiana wymaga `--prompt` (wtedy flaga działa) albo edycji `[data]` w pliku konfiguracji |
 | `.chezmoi.configFile` + `stat` w `.chezmoi.toml.tmpl` | `stat` zwraca `false` na nowym hoście i `true`, gdy plik konfiguracji już istnieje (również bez klucza `ai_profile`); `hasKey . "ai_profile"` jest `false` dla konfiguracji sprzed zmiany |
+| Stan `run_onchange_` vs `run_once_` | `run_once_` → `scriptState` (klucz = sha256 treści); `run_onchange_` → `entryState` (klucz = ścieżka docelowa, np. `<dest>/.chezmoiscripts/ai/100-a.sh`, wartość `contentsSHA256`). Skrypt z exit 0 po błędzie nie jest powtarzany przy kolejnym `apply` |
+| Reset jednego skryptu | `chezmoi state delete --bucket=entryState --key=<ścieżka docelowa>` + `chezmoi apply` → uruchamia się **tylko** ten skrypt; kolejny `apply` bez zmian — zero uruchomień. `state delete-bucket --bucket=scriptState` NIE ruszył `run_onchange_` (uruchomił tylko `run_once_`) |
 | Zachowanie wzorca „legacy-aware" | nowy host + `--promptDefaults` → `core`/`false`; istniejący bez klucza + `init` → jawnie `claude-extended`/`true` bez pytania; kolejny `init` stabilny; `init --prompt --promptChoice "AI profile=core" --promptBool "Enable Claude agent teams=false"` → `core`/`false` |
 
 Konsekwencja: naiwne `promptChoiceOnce … "core"` zapisałoby `core` także na istniejącym hoście przy pierwszym ponownym `chezmoi init` — ryzyko R11, wykluczone projektem D-G.
@@ -182,8 +184,17 @@ Dodatkowe, ortogonalne dane: `ai_claude` (bool, `true`), `ai_codex` (`true`), `a
 **D-C. Instalatory:** `run_onchange_after_` (a nie `run_once_`), render zawiera komentarz-odcisk: profil, flagi, `accepted_sha`,
 listy pluginów **oraz** `lookPath "claude"`/`"codex"` (present/absent) — dzięki temu zmiana danych albo pojawienie się CLI
 powoduje ponowne uruchomienie. Każdy skrypt: brak CLI ⇒ komunikat `SKIP` i exit 0; błąd pojedynczej operacji ⇒ `WARN`,
-kontynuacja, exit 0 (żeby nie blokować innych harnessów); podsumowanie w ostatniej linii; wymuszony retry:
-`chezmoi state delete-bucket --bucket=scriptState` (zweryfikować w T13) lub `chezmoi apply` po zmianie odcisku.
+kontynuacja, exit 0 (żeby nie blokować innych harnessów); podsumowanie w ostatniej linii oraz trwały zapis wyniku w pliku statusu
+(`${XDG_STATE_HOME:-$HOME/.local/state}/ai-workflow/<harness>.status`: `result=ok|partial|skipped`, `fails=<n>`, `accepted_sha`, czas).
+
+**D-C1. Recovery po błędzie instalacji — retry jest MANUALNY (nie ma automatycznego retry).** Zmierzone (§1.4): skrypt kończący się exit 0 po błędzie jest dla chezmoi „wykonany";
+kolejny `apply` go nie powtórzy, dopóki nie zmieni się jego wyrenderowana treść. Dlatego: (1) wynik jest zapisany w pliku statusu, (2) `ai-workflow-doctor --strict` wykrywa `partial`
+(exit 1) i **drukuje** (nie wykonuje) dokładną komendę resetu, (3) użytkownik resetuje stan **jednego** skryptu, (4) `chezmoi apply` go powtarza.
+Przebieg: `failure → ai-workflow-doctor --strict (exit 1 + komenda) → chezmoi state delete --bucket=entryState --key="<destDir>/.chezmoiscripts/ai/<nn>-<harness>-plugins.sh" → chezmoi apply → ai-workflow-doctor --strict (exit 0)`.
+Klucz = ścieżka docelowa skryptu (np. `$HOME/.chezmoiscripts/ai/100-claude-plugins.sh`; prefiksy `run_onchange_after_` i `.tmpl` są zdjęte), doctor składa go z `.chezmoi.destDir` w czasie renderu.
+**Zakazane w dokumentacji i testach:** `chezmoi state delete-bucket --bucket=scriptState` (zmierzone: nie resetuje skryptów `run_onchange_`, bo ich stan jest w `entryState`, za to uruchomiłby ponownie
+wszystkie skrypty `run_once_`, m.in. `sudo`/`pacman` w `.chezmoiscripts/linux/`) oraz `chezmoi state reset` / `delete-bucket --bucket=entryState` (kasują stan wszystkich skryptów i plików). Przed resetem doctor
+wypisuje ostrzeżenie, co dokładnie zostanie powtórzone (jeden skrypt) i że reszta `apply` przebiegnie normalnie (zmienione pliki zostaną zastosowane, jak przy każdym `apply`; podgląd: `chezmoi apply --dry-run --verbose`).
 
 **D-D. Pin:**
 
@@ -285,8 +296,8 @@ docs/
   - skrypty uruchamiane z `PATH` ze stubami `claude`/`codex` (log wywołań): tylko Claude, tylko Codex, oba, żaden; drugie uruchomienie = zero wywołań mutujących;
   - skan sekretów i brak ciągów workflow (`STANDARD|SOLO|…`) w renderach; **brak zmian poza repo/tmp**: `HOME` ustawiony na katalog tymczasowy, snapshot (`find`) katalogu rzeczywistego `$HOME` przed/po oraz `git status --porcelain` puste.
 - **CI (PR-1, Linux):** `.github/workflows/ai-tests.yml` uruchamia poziom 1 na `ubuntu-latest` z chezmoi `v2.73.1` (zweryfikowana wersja), bez `claude`/`codex`, z `permissions: contents: read`;
-  `shellcheck` dla `tests/ai/*.sh` i szablonów powłoki (gdy pojawią się); testy natywne = `NOT RUN`. Windows i macOS dochodzą z ich instalatorami (PR-4).
-- **Poziom 2 (natywny, opt-in `AI_NATIVE_TESTS=1`):** prawdziwe CLI z tymczasowym `CLAUDE_CONFIG_DIR` i `CODEX_HOME` (poza `/tmp`, bo Codex odmawia aliasów w `/tmp`; użyć `$HOME/.cache/ai-workflow-test.*`), bez tur modelu. Niewykonane = `NOT RUN`, nigdy PASS.
+  `shellcheck` dla `tests/ai/*.sh` i szablonów powłoki (gdy pojawią się). Wszystkie testy ze stubami (w tym brak CLI w PATH, `ai_claude/ai_codex=false`, brak sieci symulowany stubem, przebieg recovery) są wykonywalne w CI i **muszą dać PASS**; `NOT RUN` dotyczy wyłącznie testów natywnych. Windows i macOS dochodzą z ich instalatorami (PR-4).
+- **Poziom 2 (natywny, opt-in `AI_NATIVE_TESTS=1`):** prawdziwe CLI z tymczasowym `CLAUDE_CONFIG_DIR` i `CODEX_HOME` (poza `/tmp`, bo Codex odmawia aliasów w `/tmp`; użyć `$HOME/.cache/ai-workflow-test.*`), bez tur modelu. `NOT RUN` (z przyczyną) wolno użyć **tylko** gdy brakuje prawdziwego CLI, platformy, sieci albo zewnętrznego serwisu wymaganego przez test natywny; scenariusze, które można zasymulować stubem, są testami poziomu 1 i nie mogą być `NOT RUN`. `NOT RUN` nigdy nie jest PASS.
 - **Poziom 3 (świeże środowisko):** `chezmoi init --apply --promptDefaults` w czystym `HOME` → ponowny `chezmoi apply` → `chezmoi diff` pusty i zero wywołań mutujących (T13).
 
 ## 8. Podział na PR-y (kolejność rev. 2)
@@ -315,6 +326,8 @@ Każdy PR niezależnie odwracalny; PR-2+ nie zmieniają renderu settings (to w P
 | R6 | Brak pakietów CLI Codex/Claude Code na Linux/Windows | pewne | CLI nie instalowane | instalacja CLI poza zakresem do weryfikacji nazw (T08); doctor raportuje; skrypty SKIP |
 | R7 | Niepinowane `curl \| bash` (peon-ping, Homebrew) | stałe | reprodukowalność | tylko odnotowane; poza zakresem |
 | R8 | `run_onchange_` z `lookPath` zmienia odcisk przy zmianie PATH | niskie | dodatkowe, idempotentne uruchomienie | test idempotencji (T13) |
+| R15 | Błąd instalacji kończy skrypt exit 0, więc chezmoi uznaje go za wykonany i nie powtarza | pewne (zmierzone) | pluginy niezainstalowane bez widocznego błędu | plik statusu + `doctor --strict` + reset jednego klucza `entryState` (D-C1); test przebiegu w T06/T08/T09/T13 |
+| R16 | Reset stanu zbyt szeroki (`delete-bucket`, `state reset`) uruchamia niezwiązane skrypty (sudo/pacman) | średnie | niezamierzone zmiany systemu | komenda drukowana przez doctor dotyczy jednego klucza; zakaz szerokich komend w docs; test, że ich nie zawiera (T09) |
 | R9 | Zmiana formatu `claude plugin list --json` / `codex plugin list` | średnie | błędna detekcja „zainstalowane" | detekcja przez kod wyjścia + `jq` z fallbackiem; sprawdzenie w T06 krok 1 |
 | R10 | Agent teams wyłączone na nowych hostach | niskie | brak teams | flaga; legacy zachowane |
 | R11 | Ponowny `init` na istniejącym hoście cicho przestawia profil na `core` | wysokie bez D-G | zmiana pluginów bez zgody | D-G (`stat configFile`, jawny zapis legacy bez pytania), testy T03 |

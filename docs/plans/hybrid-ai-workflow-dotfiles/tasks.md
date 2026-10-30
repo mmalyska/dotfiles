@@ -10,6 +10,10 @@ Testy `chezmoi init` (T03) pracują **wyłącznie na kopii drzewa repo** w `$T=$
 `--config "$T/chezmoi.toml"` `--destination "$T/home"`, nigdy z `--apply`, zawsze z `</dev/null` i `timeout 30`. Flagi odpowiedzi kluczowane **tekstem promptu**
 (stałe `PROMPT_PROFILE="AI profile"`, `PROMPT_TEAMS="Enable Claude agent teams"` w `tests/ai/lib.sh`); tryb nieinteraktywny = `--promptDefaults` (nie `--no-tty`).
 
+**Bezpieczeństwo testów skryptów:** testy uruchamiające `chezmoi apply` używają kopii drzewa z usuniętymi `.chezmoiscripts/{linux,macos,windows,devcontainer}` oraz `run_once_*`
+(zostają tylko skrypty `ai/` i skrypty-kanarki testu), z `--persistent-state "$T/state"`, `HOME="$T/home"` i `PATH` ze stubami — nigdy z prawdziwym zestawem skryptów (sudo/pacman).
+**Polityka wyniku:** test, który można zasymulować stubem (brak CLI w PATH, `ai_claude/ai_codex=false`, brak sieci, awaria instalacji, recovery), jest wykonywalny i daje PASS albo FAIL; `NOT RUN` tylko dla testów natywnych bez prawdziwego CLI/platformy/sieci/serwisu.
+
 **Mapowanie PR (rev. 2):** PR-1 = T00, T01, T02, T03, T04, T04a, T11a · PR-2 = T05–T07 · PR-3 = T08–T09 · PR-4 = T10 · PR-5 = T11b, T12, T13 · zewn. = T14.
 
 ---
@@ -131,10 +135,10 @@ Windows i macOS: **poza PR-1** (dochodzą z instalatorami, T10).
 **Pliki:** Create `home/.chezmoitemplates/ai-lib.sh`; Create `tests/ai/test_lib.sh`.
 **Zmiana:** funkcje (bash 3.2-kompatybilne): `ai_log <LEVEL> <msg>` (`INFO|SKIP|WARN|DONE` na stderr, prefiks `[ai-workflow]`); `ai_have <cmd>` (`command -v`);
 `ai_soft <opis> -- <cmd…>` (uruchamia, loguje `WARN` przy ≠0, zwiększa `AI_FAILS`, zwraca 0); `ai_summary <harness>` (drukuje `DONE <harness> fails=<n>`, zawsze exit 0);
-`ai_marketplace_head <dir>` (`git -C … rev-parse HEAD` lub pusty). Dołączana przez `{{ template "ai-lib.sh" . }}`; nie czyta danych.
+`ai_marketplace_head <dir>` (`git -C … rev-parse HEAD` lub pusty); `ai_status_write <harness> <ok|partial|skipped> <fails>` (zapisuje `${XDG_STATE_HOME:-$HOME/.local/state}/ai-workflow/<harness>.status` z `result`, `fails`, `accepted_sha`, czasem UTC; `ai_summary` wywołuje go automatycznie: `fails>0` ⇒ `partial`, SKIP ⇒ `skipped`). Dołączana przez `{{ template "ai-lib.sh" . }}`; nie czyta danych.
 **Zależności:** T01.
-**Testy (`test_lib.sh`):** `ai_have nonexistent_cmd_xyz`; `ai_soft x -- false`; `ai_summary` przy `AI_FAILS=2`; `bash -n`; `shellcheck` jeśli dostępny.
-**Oczekiwany rezultat:** `ai_have` zwraca ≠0; `ai_soft` zwraca 0 i `AI_FAILS=1`; `ai_summary` drukuje `DONE … fails=2` i exit 0; `bash -n` czysty; shellcheck bez błędów lub `NOT RUN`.
+**Testy (`test_lib.sh`):** `ai_have nonexistent_cmd_xyz`; `ai_soft x -- false`; `ai_summary` przy `AI_FAILS=2` i `AI_FAILS=0`; `ai_status_write` w `HOME=$T`; `bash -n`; `shellcheck` jeśli dostępny.
+**Oczekiwany rezultat:** `ai_have` zwraca ≠0; `ai_soft` zwraca 0 i `AI_FAILS=1`; `ai_summary` drukuje `DONE … fails=2` i exit 0 oraz zapisuje `result=partial` (a przy 0 `result=ok`), plik tylko pod `$T`; `bash -n` czysty; shellcheck bez błędów lub `NOT RUN`.
 **Kryterium:** testy zielone (także w CI); biblioteka nie czyta ani nie zapisuje niczego w `$HOME`.
 **Rollback:** `git revert` (plik nieużywany do T06).
 
@@ -156,10 +160,12 @@ Windows i macOS: **poza PR-1** (dochodzą z instalatorami, T10).
   6. profil z `extras`: marketplace oficjalny (jak 3), potem 4 dodatki przez `ai_soft` (zastępuje `|| true`);
   7. `ai_summary claude`.
 **Zależności:** T04, T05.
-**Testy (`test_claude_installer.sh`, stub CLI):** (a) brak `claude` w PATH; (b) świeży stan `core`; (c) drugie uruchomienie z pełnym `$STUB_STATE`; (d) `claude-extended`; (e) `STUB_FAIL="install"`; (f) `minimal` świeży stan; (g) `AI_WORKFLOW_UPGRADE=1`; (h) head ≠ accepted; (i) odcisk przy CLI present vs absent; (j) `ai_claude=false`.
+**Testy (`test_claude_installer.sh`, stub CLI):** (a) brak `claude` w PATH; (b) świeży stan `core`; (c) drugie uruchomienie z pełnym `$STUB_STATE`; (d) `claude-extended`; (e) `STUB_FAIL="install"`; (f) `minimal` świeży stan; (g) `AI_WORKFLOW_UPGRADE=1`; (h) head ≠ accepted; (i) odcisk przy CLI present vs absent; (j) `ai_claude=false`; (k) **recovery po błędzie** (poniżej).
 **Oczekiwany rezultat:** (a) exit 0, log `SKIP`, zero wywołań; (b) 1× `marketplace add`, 12× `install`, **0×** `marketplace update`, **0×** `superpowers`; (c) 0 wywołań mutujących (`add|install|update`); (d) dodatkowo `marketplace add anthropics/claude-plugins-official` i 4 instalacje z `superpowers`;
-(e) exit 0, `fails=12`, kolejne kroki wykonane; (f) 1× `marketplace add`, dokładnie 2× `install` (`git-workflows`, `development-lifecycle`), 0 dodatków; (g) dokładnie 1× `marketplace update mmalyska-claude-plugins`; (h) `WARN drift`, exit 0; (i) dwa różne odciski (ponowne uruchomienie po instalacji CLI); (j) zero wywołań.
-**Kryterium:** (a–j) zielone w CI; evidence z kroków 1–2 zapisane z rozstrzygnięciem pin_mode; w skrypcie brak `|| true` i gołych wywołań `claude` poza `ai_soft`.
+(e) exit 0, `fails=12`, kolejne kroki wykonane; (f) 1× `marketplace add`, dokładnie 2× `install` (`git-workflows`, `development-lifecycle`), 0 dodatków; (g) dokładnie 1× `marketplace update mmalyska-claude-plugins`; (h) `WARN drift`, exit 0; (i) dwa różne odciski (ponowne uruchomienie po instalacji CLI); (j) exit 0, `SKIP`, `result=skipped`, zero wywołań mutujących;
+(k) przebieg na prawdziwym `chezmoi apply` w kopii drzewa (patrz konwencje bezpieczeństwa) z kanarkami `run_once_canary` i `run_onchange_canary`: (1) `STUB_FAIL="install"` → `apply` exit 0, `claude.status` `result=partial fails=12`; (2) po naprawie stuba **zwykły** `apply` nie powtarza skryptu (zero wywołań — test dokumentuje pułapkę);
+(3) reset `chezmoi state delete --bucket=entryState --key="$T/home/.chezmoiscripts/ai/100-claude-plugins.sh"` + `apply` → skrypt biegnie ponownie, instaluje 12 pluginów, `result=ok`; (4) kanarki nie uruchomiły się ani razu po resecie; (5) kolejny `apply` — zero wywołań. Brak automatycznego retry: bez kroku (3) stan pozostaje `partial`.
+**Kryterium:** (a–j) zielone w CI; evidence z kroków 1–2 zapisane z rozstrzygnięciem pin_mode; w skrypcie brak `|| true` i gołych wywołań `claude` poza `ai_soft`; skrypt zapisuje plik statusu we wszystkich ścieżkach (ok/partial/skipped).
 **Rollback:** `git revert` (stary `run_once` nadal obecny do T07). Na hoście niczego nie odinstalowuje, więc nie ma stanu do cofania; spike S1 nie zmienia GitHuba ani `~/.claude`.
 
 ### T07: Usunięcie starego `run_once` i migracja bez odinstalowywania (PR-2)
@@ -181,32 +187,49 @@ Windows i macOS: **poza PR-1** (dochodzą z instalatorami, T10).
   dla każdego pluginu zestawu profilu (`minimal` 2, `core`/`claude-extended` 12): `codex plugin add <n>@mmalyska-claude-plugins` przez `ai_soft` (zmierzone: idempotentne); **nigdy** `claude_extras`/Superpowers; `ai_summary codex`.
 - [ ] **Krok 3 (pakiety, warunkowo):** tylko zweryfikowane identyfikatory, za `{{ if .ai_codex }}`, w stylu istniejących `brew install`.
 **Zależności:** T05, T06.
-**Testy (`test_codex_installer.sh`, stub):** (a) brak `codex`; (b) `core` świeży; (c) powtórka ze stanem pełnym; (d) `minimal`; (e) `STUB_FAIL="plugin"`; (f) niezależność — uruchomić oba instalatory przy {brak claude, jest codex} i {jest claude, brak codex}; (g) `ai_codex=false`; (h) skan argumentów.
-Natywnie (opt-in `AI_NATIVE_TESTS=1`, `CODEX_HOME=$HOME/.cache/ai-workflow-test.XXXX`): dwa przebiegi skryptu.
+**Testy (`test_codex_installer.sh`, stub):** (a) brak `codex`; (b) `core` świeży; (c) powtórka ze stanem pełnym; (d) `minimal`; (e) `STUB_FAIL="plugin"`; (f) niezależność — uruchomić oba instalatory przy {brak claude, jest codex} i {jest claude, brak codex}; (g) `ai_codex=false`; (h) skan argumentów; (i) **recovery** jak T06(k) dla `110-codex-plugins.sh` (`STUB_FAIL="plugin"` → `partial` → reset klucza `entryState` tego skryptu → `apply` → `ok`), przy czym skrypt Claude nie jest powtarzany; (j) awaria sieci stubem (`STUB_FAIL="marketplace"`) → exit 0, `WARN`, `result=partial`, brak prób instalacji pluginów, kolejne uruchomienie po resecie kończy `ok`.
+(i, j) PASS z asercjami jak w T06(k) i niepowtarzaniem skryptu Claude. Natywnie (opt-in `AI_NATIVE_TESTS=1`; brak prawdziwego `codex`/sieci ⇒ `NOT RUN` z przyczyną, `CODEX_HOME=$HOME/.cache/ai-workflow-test.XXXX`): dwa przebiegi skryptu.
 **Oczekiwany rezultat:** (a) exit 0, SKIP, zero wywołań; (b) 1× `marketplace add … --ref 25d785abee26ca7a3c87e8311f46e8a90f225301`, 12× `plugin add`, 0 z `superpowers`; (c) 0 wywołań mutujących; (d) 2× `plugin add`; (e) exit 0, `fails=12`;
-(f) w obu konfiguracjach skonfigurowany harness jest kompletny, brakujący tylko SKIP; (g) zero wywołań; (h) żaden argument nie zawiera `delegate|team|orchestrat`. Natywnie: `config.toml` ma `ref = "25d785a…"`, `[plugins."git-workflows@mmalyska-claude-plugins"] enabled = true`, a drugi przebieg nie zmienia pliku (`diff` pusty).
+(f) w obu konfiguracjach skonfigurowany harness jest kompletny, brakujący tylko SKIP; (g) exit 0, `SKIP`, `result=skipped`, zero wywołań mutujących; (h) żaden argument nie zawiera `delegate|team|orchestrat`. Natywnie: `config.toml` ma `ref = "25d785a…"`, `[plugins."git-workflows@mmalyska-claude-plugins"] enabled = true`, a drugi przebieg nie zmienia pliku (`diff` pusty).
 **Kryterium:** testy stubowe zielone w CI; przebieg natywny opisany w evidence albo `NOT RUN`; pakiety CLI tylko z dowodem.
 **Rollback:** `git revert`; na hostach `codex plugin remove <n>` i `codex plugin marketplace remove mmalyska-claude-plugins` **ręcznie** (runbook), nigdy automatycznie.
 
 ### T09: `ai-workflow-doctor` — raport tylko do odczytu (PR-3)
 
 **Pliki:** Create `home/dot_local/bin/executable_ai-workflow-doctor.tmpl` (**`.tmpl`**: czyta `accepted_sha`, profil i flagi z danych; cel `~/.local/bin/ai-workflow-doctor`, tryb 0755 — zweryfikowane, że `.tmp` nie jest rozszerzeniem chezmoi); Create `tests/ai/test_doctor.sh`.
-**Zmiana:** skrypt bash drukujący tabelę: profil i flagi, obecność `claude`/`codex`/`opencode` + `--version`, stan marketplace (Claude: HEAD vs `accepted_sha` → `OK|DRIFT|ABSENT`; Codex: `ref` z `config.toml` vs `accepted_sha`),
-brakujące/dodatkowe pluginy względem profilu, ostrzeżenie gdy `superpowers` jest włączony a profil go nie przewiduje. Zero zapisów, zero `add|install|update`. Exit 0 zawsze; `--strict` → exit 1 przy `DRIFT|MISSING`.
+**Zmiana:** skrypt bash czytający pliki statusu z instalatorów (`<harness>.status`) i drukujący tabelę: profil i flagi, obecność `claude`/`codex`/`opencode` + `--version`, stan marketplace (Claude: HEAD vs `accepted_sha` → `OK|DRIFT|ABSENT`; Codex: `ref` z `config.toml` vs `accepted_sha`),
+brakujące/dodatkowe pluginy względem profilu, ostrzeżenie gdy `superpowers` jest włączony a profil go nie przewiduje. Zero zapisów, zero `add|install|update`. Exit 0 zawsze; `--strict` → exit 1 przy `DRIFT|MISSING` lub `result=partial` (`skipped` z powodu braku CLI/`ai_*=false` nie jest błędem). Przy `partial` **drukuje** (nie wykonuje) komendę resetu jednego skryptu z D-C1: `chezmoi state delete --bucket=entryState --key="{{ .chezmoi.destDir }}/.chezmoiscripts/ai/<nn>-<harness>-plugins.sh"` i `chezmoi apply`, z ostrzeżeniem: powtórzony zostanie tylko ten skrypt; `delete-bucket`/`state reset` są niedozwolone.
 **Zależności:** T06, T08.
-**Testy:** (a) nazwa/tryb: `chezmoi … managed` zawiera `.local/bin/ai-workflow-doctor` i nie zawiera `.tmpl`/`.tmp`; po `apply` do katalogu tymczasowego plik jest wykonywalny, a jego treść nie zawiera `{{`; (b) stuby ze stanem pełnym; (c) HEAD ≠ accepted; (d) brak obu CLI; (e) log stubów.
-**Oczekiwany rezultat:** (a) PASS; (b) wszystkie `OK`; (c) `DRIFT`, exit 0 (`--strict` exit 1); (d) `ABSENT`, exit 0; (e) brak podkomend mutujących.
+**Testy:** (a) nazwa/tryb: `chezmoi … managed` zawiera `.local/bin/ai-workflow-doctor` i nie zawiera `.tmpl`/`.tmp`; po `apply` do katalogu tymczasowego plik jest wykonywalny, a jego treść nie zawiera `{{`; (b) stuby ze stanem pełnym; (c) HEAD ≠ accepted; (d) brak obu CLI; (e) log stubów; (f) **przebieg recovery** (z T06(k)/T08(i), tym razem z doctorem): `failure → doctor --strict` exit 1 i drukuje komendę → test wykonuje dokładnie wydrukowaną komendę (parsowaną z wyjścia) → `chezmoi apply` → `doctor --strict` exit 0; (g) wydrukowana komenda nie zawiera `delete-bucket`, `state reset` ani `scriptState` i dotyczy dokładnie jednego klucza; doctor jej sam nie wykonuje (stan `entryState` przed/po `doctor` identyczny); (h) `skipped` (brak CLI) → `--strict` exit 0.
+**Oczekiwany rezultat:** (a) PASS; (b) wszystkie `OK`; (c) `DRIFT`, exit 0 (`--strict` exit 1); (d) `ABSENT`, exit 0; (e) brak podkomend mutujących; (f) PASS: po sekwencji status `ok`, kanarki nieuruchomione; (g) PASS; (h) exit 0.
 **Kryterium:** testy zielone; doctor używany w T13; w dokumentacji wzmianka, że `~/.local/bin` musi być w `PATH`.
 **Rollback:** `git revert` (plik pomocniczy, brak wpływu na `apply`); usunięcie `~/.local/bin/ai-workflow-doctor` ręcznie.
 
 ### T10: Windows, macOS CI, devcontainer i `.chezmoiignore` (PR-4)
 
-**Pliki:** Modify `home/.chezmoiignore`; Create `home/.chezmoiscripts/ai/run_onchange_after_100-claude-plugins.ps1.tmpl`, `run_onchange_after_110-codex-plugins.ps1.tmpl`; Modify `.github/workflows/ai-tests.yml` (jobs `macos`, `windows`); Create `tests/ai/test_ignore.sh`.
-**Zmiana:** `.chezmoiignore`: na `windows` ignorować `*.sh` w `.chezmoiscripts/ai/`, na `linux`/`darwin` — `*.ps1`; devcontainer **nie** ignoruje `ai/`; skrypty PowerShell odwzorowują T06/T08 (`Get-Command … -ErrorAction SilentlyContinue`, SKIP bez CLI, bez `exit 1`). CI: macOS i Windows uruchamiają odpowiednie podzbiory testów renderu/ignorowania.
+**Pliki:** Modify `home/.chezmoiignore`; Create cztery szablony instalatorów (dwa Bash z T06/T08 już istnieją): `home/.chezmoiscripts/ai/run_onchange_after_100-claude-plugins.ps1.tmpl`, `home/.chezmoiscripts/ai/run_onchange_after_110-codex-plugins.ps1.tmpl`;
+Modify `.github/workflows/ai-tests.yml` (jobs `macos`, `windows`; akcje przypięte do 40-znakowego SHA, O5); Create `tests/ai/test_ignore.sh`, `tests/ai/render_ignore.sh`.
+**Zmiana:** devcontainer jest środowiskiem **Linux** (`.chezmoi.os == linux`, `is_devcontainer == true`) i dostaje dokładnie to samo co Linux. Reguły (po nazwach docelowych `.chezmoiscripts/ai/…`):
+
+- `windows` ignoruje `*.sh`; `linux`, `darwin` i devcontainer ignorują `*.ps1`;
+- gałąź `is_devcontainer` w `.chezmoiignore` nie ignoruje `ai/` (zostaje tylko dotychczasowe ignorowanie `.chezmoiscripts/<os>/*`);
+- skrypty PowerShell odwzorowują T06/T08 (`Get-Command … -ErrorAction SilentlyContinue`, SKIP bez CLI, plik statusu, bez `exit 1`).
+
+Oczekiwany podział czterech plików źródłowych (nazwy docelowe w nawiasie):
+
+| Środowisko | Aktywne | Ignorowane |
+| --- | --- | --- |
+| Linux | `run_onchange_after_100-claude-plugins.sh.tmpl` (`.chezmoiscripts/ai/100-claude-plugins.sh`), `run_onchange_after_110-codex-plugins.sh.tmpl` (`…/110-codex-plugins.sh`) | `run_onchange_after_100-claude-plugins.ps1.tmpl` (`…/100-claude-plugins.ps1`), `run_onchange_after_110-codex-plugins.ps1.tmpl` (`…/110-codex-plugins.ps1`) |
+| macOS | jak Linux | jak Linux |
+| devcontainer (Linux) | jak Linux: oba `.sh.tmpl` | jak Linux: oba `.ps1.tmpl` |
+| Windows | oba `.ps1.tmpl` | oba `.sh.tmpl` |
+
 **Zależności:** T08.
-**Testy (`test_ignore.sh`):** `.chezmoiignore` renderowany dla fixtures `linux`, `darwin`, `windows`, `devcontainer` — lista wzorców porównana z tabelą w teście; `pwsh` parse-check (`[System.Management.Automation.Language.Parser]::ParseFile`) jeśli `pwsh` dostępny.
-**Oczekiwany rezultat:** na `windows` żaden `.sh` z `ai/` nie jest zarządzany; na `linux/darwin` żaden `.ps1`; w `devcontainer` oba skrypty `ai/` aktywne; `pwsh` parse-check PASS lub `NOT RUN` (jawnie oznaczone w PR jako nieprzetestowane na Windows).
-**Kryterium:** żaden OS nie dostaje cudzego skryptu; Windows bez `bash` nie wywala `apply`; joby CI zielone.
+**Testy (`test_ignore.sh`):** `.chezmoi.os` nie da się nadpisać danymi, więc `render_ignore.sh <os> <is_devcontainer>` renderuje kopię `home/.chezmoiignore` z podstawieniem `.chezmoi.os` na wartość testową (tylko w teście; zmiana mechaniczna, sprawdzana asercją, że kopia różni się od oryginału wyłącznie tym podstawieniem).
+Dla każdego z czterech środowisk test sprawdza **każdą z czterech nazw docelowych osobno** (`100-claude-plugins.sh`, `110-codex-plugins.sh`, `100-claude-plugins.ps1`, `110-codex-plugins.ps1`) względem tabeli — asercja per plik, nie zbiorcze „oba skrypty". Dodatkowo na prawdziwym hoście Linux:
+`chezmoi managed --include=scripts` (na kopii drzewa) zawiera dokładnie `100-claude-plugins.sh` i `110-codex-plugins.sh` oraz żadnego `.ps1`; z fixture `is_devcontainer=true` wynik identyczny; `pwsh` parse-check obu `.ps1.tmpl` (po renderze) jeśli `pwsh` dostępny.
+**Oczekiwany rezultat:** tabela spełniona dla wszystkich 4×4 par (środowisko, plik); devcontainer == Linux; Windows ma wyłącznie `.ps1`, Linux/macOS/devcontainer wyłącznie `.sh`; `pwsh` parse-check PASS albo `NOT RUN` (brak `pwsh` — powód zapisany; dotyczy tylko parse-checku, nie testu ignorowania).
+**Kryterium:** żaden OS ani devcontainer nie dostaje cudzego skryptu; Windows bez `bash` nie wywala `apply`; joby CI zielone (testy ignorowania uruchamiane na Linux w CI, na macOS i Windows w ich jobach).
 **Rollback:** `git revert`; ignorowanie plików nie dotyka `$HOME`.
 
 ### T11: Dokumentacja bieżąca vs historyczna, runbook upgrade/rollback, backup (T11a w PR-1, T11b w PR-5)
@@ -215,9 +238,9 @@ brakujące/dodatkowe pluginy względem profilu, ostrzeżenie gdy `superpowers` j
 **Zmiana:** `docs/README.md`: tabela „bieżące" (`docs/plans/**`, `docs/workflow/**`) vs „historyczne, nie wykonywać jako instrukcji" (`docs/superpowers/**`, 3 pliki z 2026-05-15; ścieżka `~/.local/share/chezmoi/home/dot_claude/` nieaktualna) — **bez edycji** tych plików.
 `upgrade-runbook.md`: (0) `chezmoi init --promptDefaults` w kontenerach i `--prompt` do świadomej zmiany profilu (z tekstami promptów); (1) backup (`backup.sh`: `settings.json`, `config.toml`, `claude plugin list --json`, `codex plugin list`); (2) test nowej rewizji w izolowanym HOME;
 (3) PR zmieniający `accepted_sha` (i `accepted_tag` po T14) + wpis w `acceptance.md`; (4) `AI_WORKFLOW_UPGRADE=1 chezmoi apply`; (5) Claude: `claude plugin marketplace update mmalyska-claude-plugins` + reinstall zmienionych + nowa sesja; Codex: `marketplace add … --ref <nowy>` (przy „pin mismatch": `marketplace remove` + `add` — zweryfikować w T13);
-(6) `ai-workflow-doctor --strict`; (7) **rollback** = poprzedni `accepted_sha` + te same kroki; dezaktywacja pluginu przez zmianę profilu; usuwanie tylko ręcznie.
+(6) `ai-workflow-doctor --strict`; przy `partial` — procedura recovery z D-C1: `failure → doctor --strict → chezmoi state delete --bucket=entryState --key=<drukowany klucz> → chezmoi apply → doctor --strict`, z wyraźnym ostrzeżeniem, że `delete-bucket scriptState` i `state reset` są zabronione (uruchamiają niezwiązane skrypty `run_once_`); (7) **rollback** = poprzedni `accepted_sha` + te same kroki; dezaktywacja pluginu przez zmianę profilu; usuwanie tylko ręcznie.
 **Zależności:** T11a — T02; T11b — T09.
-**Testy:** `tests/ai/test_links.sh` (każdy względny link w `docs/**/*.md` istnieje); `git diff --stat -- docs/superpowers` ; `grep -c "docs/superpowers" docs/README.md`; `backup.sh` ze stubami + `sha256sum` źródeł przed/po.
+**Testy:** `tests/ai/test_links.sh` (każdy względny link w `docs/**/*.md` istnieje); `git diff --stat -- docs/superpowers` ; `grep -c "docs/superpowers" docs/README.md`; `grep -rn "delete-bucket" docs tests` zwraca wyłącznie wystąpienia w kontekście zakazu; `backup.sh` ze stubami + `sha256sum` źródeł przed/po.
 **Oczekiwany rezultat:** brak martwych linków; diff `docs/superpowers` pusty; grep ≥ 1; `backup.sh` zapisuje 4 pliki i nie zmienia źródeł.
 **Kryterium:** nowa sesja z samym `docs/README.md` odróżnia bieżące od historycznych; runbook wykonalny krok po kroku.
 **Rollback:** `git revert` (dokumentacja i skrypt pomocniczy).
@@ -234,16 +257,26 @@ brakujące/dodatkowe pluginy względem profilu, ostrzeżenie gdy `superpowers` j
 
 ### T13: Test świeżego środowiska i ponownego `chezmoi apply` (PR-5)
 
-**Pliki:** Create `tests/ai/e2e-fresh-home.sh` (opt-in `AI_NATIVE_TESTS=1`); Create `docs/workflow/evidence/T13-e2e.md`.
-**Zmiana:** skrypt tworzy `HOME=$(mktemp -d "$HOME/.cache/ai-e2e.XXXX")` (poza `/tmp`) z własnymi `CLAUDE_CONFIG_DIR`, `CODEX_HOME`; uruchamia `chezmoi init --apply --source <kopia repo> --promptDefaults --promptChoice "AI profile=<p>" …` dla macierzy:
-{profil: minimal, core, claude-extended} × {CLI: oba, tylko claude, tylko codex, żaden (PATH bez nich)}; następnie drugi `chezmoi apply`, `chezmoi diff` i `ai-workflow-doctor --strict`. Dodatkowo scenariusz hosta legacy (konfiguracja bez `ai_*` → `apply` → `init` → `apply`). Sprzątanie tylko własnego katalogu (kontrola prefiksu).
+**Pliki:** Create `tests/ai/test_fresh_home.sh` (stuby, **wykonywalny w CI**); Create `tests/ai/e2e-native.sh` (opt-in `AI_NATIVE_TESTS=1`); Create `docs/workflow/evidence/T13-e2e.md`.
+**Zmiana:** dwie warstwy.
+**Warstwa A — `test_fresh_home.sh` (stuby, bez sieci, w CI, każdy scenariusz = PASS/FAIL, nigdy `NOT RUN`):** `HOME=$(mktemp -d)` z własnym `PATH` ze stubami; kopia drzewa bez skryptów systemowych (konwencje bezpieczeństwa); `chezmoi init --apply --promptDefaults --promptChoice "AI profile=<p>"`;
+macierz {minimal, core, claude-extended} × {oba CLI, tylko claude, tylko codex, żaden (PATH bez nich)}; plus scenariusze: `ai_claude=false`, `ai_codex=false`, oba `false`; brak sieci stubem (`STUB_FAIL="marketplace"`); host legacy (konfiguracja bez `ai_*` → `apply` → `init` → `apply`); recovery (jak T06(k)/T09(f)).
+**Warstwa B — `e2e-native.sh` (prawdziwe CLI, opt-in):** ta sama macierz z `HOME=$(mktemp -d "$HOME/.cache/ai-e2e.XXXX")` (poza `/tmp`), własnymi `CLAUDE_CONFIG_DIR`, `CODEX_HOME`. `NOT RUN` **wyłącznie** gdy brak prawdziwego CLI, brak prawdziwej sieci/dostępu do GitHub, inna platforma lub niedostępny serwis — każdorazowo z przyczyną w evidence.
 **Zależności:** T04, T06, T08, T09, T10.
-**Testy:** macierz z opisu zmiany.
-**Oczekiwany rezultat:** każda komórka: pierwszy apply exit 0; drugi apply exit 0, `chezmoi diff` pusty, brak wywołań mutujących CLI (log wrapperów); `minimal` → w `settings.json` 2 pluginy, na liście pluginów 2; `core` → brak `superpowers`; `claude-extended` → jest;
-po `claude plugin disable superpowers@claude-plugins-official` w izolowanym HOME apply i doctor nadal exit 0; „tylko codex" → Claude SKIP, Codex skonfigurowany (`ref = "25d785a…"`); „żaden" → oba SKIP, exit 0; legacy → render == golden, po `init` jawne `claude-extended`/`true`, kolejny `apply` bez różnic;
-brak `STANDARD|SOLO|profile|topology` i sekretów w renderach; retry: `chezmoi state delete-bucket --bucket=scriptState` → instalatory biegną ponownie i nie wykonują operacji mutujących; Codex przy zmianie `accepted_sha` — zmierzyć i zapisać zachowanie `marketplace add --ref <inny>` dla istniejącego wpisu. Komórki bez CLI/sieci → `NOT RUN`, nie PASS.
-**Kryterium:** macierz PASS albo jawnie `NOT RUN` z przyczyną; evidence zapisane; prawdziwe `~/.claude`/`~/.codex` nietknięte (`sha256sum` przed/po).
-**Rollback:** `git revert`; test nie modyfikuje hosta (własny HOME).
+**Testy:** `bash tests/ai/test_fresh_home.sh` (A); `AI_NATIVE_TESTS=1 bash tests/ai/e2e-native.sh` (B).
+**Oczekiwany rezultat (warstwa A, wszystko PASS):**
+
+- każda komórka macierzy: pierwszy apply exit 0; drugi apply exit 0; `chezmoi diff` pusty; zero wywołań mutujących stubów przy drugim przebiegu;
+- `minimal`: `settings.json` ma 2 pluginy, stub `install` wywołany 2×; `core`: brak `superpowers`; `claude-extended`: jest;
+- **brak CLI w PATH:** oba instalatory `SKIP`, exit 0, zero wywołań mutujących, `result=skipped`; „tylko codex" → Claude SKIP, Codex skonfigurowany (`--ref 25d785a…`); „tylko claude" → odwrotnie;
+- **`ai_claude=false` / `ai_codex=false`:** PASS z `SKIP`, exit 0, zero wywołań mutujących dla wyłączonego harnessu, drugi harness bez zmian;
+- **brak sieci (stub):** `WARN`, exit 0, `result=partial`, zero prób instalacji pluginów po nieudanym `marketplace add`, `doctor --strict` exit 1; po naprawie stuba i resecie klucza `entryState` jednego skryptu → `ok` (deterministyczny PASS);
+- **legacy:** render == golden; po `init` jawne `claude-extended`/`true`; kolejny `apply` bez różnic;
+- wyłączenie Superpowers (stub `plugin disable`) nie psuje `apply` ani doctora; w renderach brak `STANDARD|SOLO|profile|topology` i sekretów;
+- retry opisany w D-C1: reset **jednego** klucza `entryState`; test sprawdza `grep -rn "delete-bucket" tests docs/workflow`: dozwolone są wyłącznie linie z jawnym zakazem (zawierające `zabron`/`NIE`/`nie wolno`), żadnej wykonywalnej i że kanarki `run_once_`/`run_onchange_` nie uruchomiły się po resecie.
+**Oczekiwany rezultat (warstwa B):** te same asercje z prawdziwymi CLI; dodatkowo zapisać zachowanie Codex `marketplace add --ref <inny>` przy istniejącym wpisie; komórki bez dostępnego prawdziwego CLI/sieci → `NOT RUN` z przyczyną, nie PASS.
+**Kryterium:** warstwa A zielona w CI; warstwa B PASS albo jawnie `NOT RUN` z dopuszczalną przyczyną; prawdziwe `~/.claude`/`~/.codex` nietknięte (`sha256sum` przed/po).
+**Rollback:** `git revert`; testy pracują w własnym HOME i nie modyfikują hosta.
 
 ### T14: Zewnętrzne — tag `ai-workflow-v0.1.0-preview.1` w `claude-plugins` (poza dotfiles; tylko na osobne polecenie)
 
