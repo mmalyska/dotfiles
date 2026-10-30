@@ -1,0 +1,43 @@
+name: ai-tests
+
+on:
+  pull_request:
+    paths:
+      - "home/**"
+      - "tests/ai/**"
+      - ".github/workflows/ai-tests.yml"
+      - "docs/workflow/**"
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    env:
+      # renovate: datasource=github-releases depName=twpayne/chezmoi
+      CHEZMOI_VERSION: v2.73.1
+      CHEZMOI_SHA256: a3f958acb7d0e5d53fa43c2eec9bc8ae3b4fba8bcbfdce29a8881ca3ffc20a53
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install chezmoi
+        run: |
+          set -euo pipefail
+          f="chezmoi_${CHEZMOI_VERSION#v}_linux_amd64.tar.gz"
+          curl -fsSL -o "$RUNNER_TEMP/$f" "https://github.com/twpayne/chezmoi/releases/download/${CHEZMOI_VERSION}/$f"
+          echo "$CHEZMOI_SHA256  $RUNNER_TEMP/$f" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/bin"
+          tar -xzf "$RUNNER_TEMP/$f" -C "$RUNNER_TEMP/bin" chezmoi
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+      - name: Versions
+        run: |
+          chezmoi --version
+          shellcheck --version
+      - name: shellcheck
+        run: shellcheck -x tests/ai/*.sh tests/ai/stubs/*
+      - name: Tests
+        run: bash tests/ai/run.sh
+      - name: Working tree must stay clean
+        run: test -z "$(git status --porcelain)"
