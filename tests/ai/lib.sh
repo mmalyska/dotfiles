@@ -26,9 +26,12 @@ assert_not_contains() { # name haystack needle
     case "$2" in *"$3"*) _fail "$1: unexpected [$3] found";; esac
 }
 assert_calls() { # name logfile extended-regex expected-count
-    local n
+    local n seen
     n=$(grep -cE "$3" "$2" 2>/dev/null || true)
-    [ "${n:-0}" = "$4" ] || _fail "$1: expected $4 calls matching /$3/, got ${n:-0}"
+    if [ "${n:-0}" != "$4" ]; then
+        seen=$(grep -E "$3" "$2" 2>/dev/null | head -5 | paste -sd ';' - || true)
+        _fail "$1: expected $4 calls matching /$3/, got ${n:-0} [$seen]"
+    fi
 }
 
 # new_tmp: private temp dir removed on exit (only directories created here).
