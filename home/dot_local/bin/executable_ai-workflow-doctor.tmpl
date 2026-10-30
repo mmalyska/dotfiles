@@ -1,0 +1,146 @@
+{{- $ai := includeTemplate "ai-profile.tmpl" . | fromJson -}}
+{{- $wf := .ai_workflow -}}
+{{- $own := $wf.marketplace.own -}}
+{{- $official := $wf.marketplace.official -}}
+{{- $profile := index $wf.profiles $ai.profile -}}
+{{- $plugins := index $wf.plugins $profile.own_set -}}
+{{- $extras := list -}}
+{{- if $profile.extras }}{{ $extras = $wf.plugins.claude_extras }}{{ end -}}
+{{- $claude := true -}}
+{{- if hasKey . "ai_claude" }}{{ $claude = .ai_claude }}{{ end -}}
+{{- $codex := true -}}
+{{- if hasKey . "ai_codex" }}{{ $codex = .ai_codex }}{{ end -}}
+{{- $opencode := false -}}
+{{- if hasKey . "ai_opencode" }}{{ $opencode = .ai_opencode }}{{ end -}}
+#!/usr/bin/env bash
+# ai-workflow-doctor: read-only report on the AI workflow installers (managed by chezmoi, do not edit in place).
+# Usage: ai-workflow-doctor [--strict]
+#   --strict  exit 1 on DRIFT, MISSING or an installer result of "partial" (skipped is never an error)
+# Reads the installer status files and asks the CLIs for their lists. It never writes, installs, adds or updates anything;
+# when an installer ended "partial" it only PRINTS the command that re-runs that single installer.
+# Needs ~/.local/bin on PATH.
+set -u
+
+PROFILE={{ $ai.profile | quote }}
+AGENT_TEAMS={{ if hasKey . "ai_agent_teams" }}{{ .ai_agent_teams }}{{ else }}{{ $ai.profile | eq "claude-extended" }}{{ end }}
+USE_CLAUDE={{ $claude }}
+USE_CODEX={{ $codex }}
+USE_OPENCODE={{ $opencode }}
+ACCEPTED_SHA={{ $own.accepted_sha | quote }}
+OWN_NAME={{ $own.name | quote }}
+OFFICIAL_NAME={{ $official.name | quote }}
+PLUGINS={{ join " " $plugins | quote }}
+EXTRAS={{ join " " $extras | quote }}
+DEST_DIR={{ .chezmoi.destDir | quote }}
+
+STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/ai-workflow"
+STRICT=0
+[ "${1:-}" = "--strict" ] && STRICT=1
+BAD=0
+
+have() { command -v "$1" >/dev/null 2>&1; }
+flag() { [ "$1" = true ] && echo enabled || echo disabled; }
+version() { local v; v=$("$1" --version 2>/dev/null | head -n 1) || v=""; echo "${v:-unknown}"; }
+status_field() { sed -n "s/^$2=//p" "$STATE_DIR/$1.status" 2>/dev/null | head -n 1; }
+ids() { sed -n "s/.*\"$1\": *\"\\([^\"]*\\)\".*/\\1/p"; }
+has_word() { case " $1 " in *" $2 "*) return 0;; esac; return 1; }
+
+# plugin_report <harness> <installed ids, one per line>
+plugin_report() {
+    local h=$1 installed=$2 p missing="" extra="" n=0 total=0
+    for p in $PLUGINS; do
+        total=$((total + 1))
+        if printf '%s\n' "$installed" | grep -qxF "$p@$OWN_NAME"; then n=$((n + 1)); else missing="$missing $p"; fi
+    done
+    if [ "$h" = claude ]; then
+        for p in $EXTRAS; do
+            total=$((total + 1))
+            if printf '%s\n' "$installed" | grep -qxF "$p@$OFFICIAL_NAME"; then n=$((n + 1)); else missing="$missing $p@$OFFICIAL_NAME"; fi
+        done
+    fi
+    while IFS= read -r p; do
+        [ -n "$p" ] || continue
+        case "$p" in
+            *@"$OWN_NAME") has_word "$PLUGINS" "${p%@*}" || extra="$extra $p";;
+            *@"$OFFICIAL_NAME") has_word "$EXTRAS" "${p%@*}" || extra="$extra $p";;
+        esac
+    done <<< "$installed"
+    if [ -n "$missing" ]; then
+        PLUGIN_STATE="MISSING"; BAD=1
+    else
+        PLUGIN_STATE="OK"
+    fi
+    PLUGIN_COUNT="$n/$total"
+    [ -z "$missing" ] || echo "  MISSING:$missing"
+    [ -z "$extra" ] || echo "  EXTRA (not in profile $PROFILE, left alone):$extra"
+    if printf '%s\n' "$installed" | grep -q '^superpowers@' && ! has_word "$EXTRAS" superpowers; then
+        echo "  WARN superpowers is enabled in $h but profile $PROFILE does not include it"
+    fi
+}
+
+# recovery_hint <harness> <script basename>: prints, never runs
+recovery_hint() {
+    cat <<HINT
+  To re-run only the $1 installer, run these two commands yourself:
+    chezmoi state delete --bucket=entryState --key="$DEST_DIR/.chezmoiscripts/ai/$2"
+    chezmoi apply
+  Only that script runs again; do not use delete-bucket or "state reset".
+HINT
+}
+
+# report <harness> <enabled> <script basename>
+report() {
+    local h=$1 enabled=$2 script=$3 mp result fails installed
+    echo "[$h] $(flag "$enabled")"
+    result=$(status_field "$h" result)
+    fails=$(status_field "$h" fails)
+    if [ "$enabled" != true ]; then echo "  skipped: ai_$h=false"; return; fi
+    if ! have "$h"; then echo "  CLI: ABSENT (installer skips until it is installed)"; echo "  installer: ${result:-no status}"; return; fi
+    echo "  CLI: $(version "$h")"
+    if [ "$h" = claude ]; then mp=$(marketplace_claude); else mp=$(marketplace_codex); fi
+    echo "  marketplace $OWN_NAME: $mp"
+    [ "$mp" != DRIFT ] || BAD=1
+    if [ "$h" = claude ]; then
+        installed=$(claude plugin list --json 2>/dev/null | ids id)
+    else
+        installed=$(codex plugin list --json 2>/dev/null | ids pluginId)
+    fi
+    plugin_report "$h" "$installed"
+    echo "  plugins: $PLUGIN_COUNT $PLUGIN_STATE"
+    echo "  installer: ${result:-no status}${fails:+ (fails=$fails)}"
+    if [ "$result" = partial ]; then
+        BAD=1
+        recovery_hint "$h" "$script"
+    elif [ "$PLUGIN_STATE" = MISSING ] && [ "$result" != skipped ]; then
+        recovery_hint "$h" "$script"
+    fi
+}
+
+marketplace_claude() {
+    local dir="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/plugins/marketplaces/$OWN_NAME" head
+    head=$(git -C "$dir" rev-parse HEAD 2>/dev/null) || head=""
+    if [ -z "$head" ]; then echo ABSENT; elif [ "$head" = "$ACCEPTED_SHA" ]; then echo OK; else echo DRIFT; fi
+}
+marketplace_codex() {
+    local cfg="${CODEX_HOME:-$HOME/.codex}/config.toml" ref=""
+    [ -r "$cfg" ] && ref=$(awk -v sec="[marketplaces.$OWN_NAME]" '
+        /^\[/ { in_sec = ($0 == sec); next }
+        in_sec && $1 == "ref" { gsub(/^[^"]*"|"[^"]*$/, ""); print; exit }
+    ' "$cfg")
+    if [ -z "$ref" ]; then echo ABSENT; elif [ "$ref" = "$ACCEPTED_SHA" ]; then echo OK; else echo DRIFT; fi
+}
+
+echo "AI workflow doctor"
+echo "profile: $PROFILE   agent_teams: $AGENT_TEAMS"
+echo "accepted_sha: $ACCEPTED_SHA"
+echo
+report claude "$USE_CLAUDE" 100-claude-plugins.sh
+echo
+report codex "$USE_CODEX" 110-codex-plugins.sh
+echo
+echo "[opencode] $(flag "$USE_OPENCODE")"
+if have opencode; then echo "  CLI: $(version opencode)"; else echo "  CLI: ABSENT"; fi
+echo
+if [ "$BAD" = 1 ]; then echo "result: PROBLEMS FOUND"; else echo "result: OK"; fi
+if [ "$STRICT" = 1 ] && [ "$BAD" = 1 ]; then exit 1; fi
+exit 0
