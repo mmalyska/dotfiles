@@ -18,6 +18,29 @@
     {{- end -}}
 {{- end -}}
 
+{{- /*
+  AI workflow profile (see docs/plans/hybrid-ai-workflow-dotfiles/plan.md, D-G).
+  An existing host is recognised by an already existing chezmoi config file that has no ai_profile yet
+  (NOT by the missing key alone: a new host lacks it too). Such a host keeps its previous setup,
+  written explicitly and without asking: claude-extended + agent teams (unless init --prompt asks to migrate). A new host gets the core profile.
+  --promptChoice/--promptBool flags are keyed by the prompt text, so keep the texts in sync with tests/ai/lib.sh.
+*/ -}}
+{{- $aiExisting := stat .chezmoi.configFile -}}
+{{- $aiReprompt := has "--prompt" .chezmoi.args -}}
+{{- $aiLegacyHost := and $aiExisting (not (hasKey . "ai_profile")) (not $aiReprompt) -}}
+{{- $aiProfile := "claude-extended" -}}
+{{- $aiTeams := true -}}
+{{- $aiClaude := true -}}
+{{- $aiCodex := true -}}
+{{- $aiOpencode := false -}}
+{{- if not $aiLegacyHost -}}
+{{-   $aiProfile = promptChoiceOnce . "ai_profile" "AI profile" (list "minimal" "core" "claude-extended") "core" -}}
+{{-   $aiTeams = promptBoolOnce . "ai_agent_teams" "Enable Claude agent teams" false -}}
+{{-   $aiClaude = promptBoolOnce . "ai_claude" "Configure Claude Code plugins" true -}}
+{{-   $aiCodex = promptBoolOnce . "ai_codex" "Configure Codex plugins" true -}}
+{{-   $aiOpencode = promptBoolOnce . "ai_opencode" "Enable OpenCode (experimental, not implemented)" false -}}
+{{- end }}
+
 [data]
     email         = {{ $email | quote }}
     user          = {{ $user  | quote }}
@@ -25,6 +48,11 @@
     is_arch       = {{ $isArch }}
     is_work       = {{ $isWork }}
     is_devcontainer = {{ $isDevContainer }}
+    ai_profile      = {{ $aiProfile | quote }}
+    ai_agent_teams  = {{ $aiTeams }}
+    ai_claude       = {{ $aiClaude }}
+    ai_codex        = {{ $aiCodex }}
+    ai_opencode     = {{ $aiOpencode }}
 
 [merge]
     command = "bash"

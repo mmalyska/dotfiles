@@ -48,3 +48,26 @@ render() {
 
 # sorted_json: normalise JSON on stdin (valid JSON required)
 sorted_json() { python3 -I -m json.tool --sort-keys; }
+
+# Remaining prompt texts of .chezmoi.toml.tmpl (see PROMPT_PROFILE/PROMPT_TEAMS above).
+PROMPT_CLAUDE="Configure Claude Code plugins"
+PROMPT_CODEX="Configure Codex plugins"
+PROMPT_OPENCODE="Enable OpenCode (experimental, not implemented)"
+# Prompts that exist since before the AI workflow work; answered explicitly in init tests.
+PRE_FLAGS=(--promptString "Email address for git=test@example.invalid"
+           --promptString "User name for git=Test User"
+           --promptBool "If work machine=false")
+
+# resolve_profile <fixture>  -> JSON from ai-profile.tmpl
+resolve_profile() {
+    chezmoi --source "$AI_ROOT" --config "$FIXTURES/$1.toml" execute-template \
+        '{{ includeTemplate "ai-profile.tmpl" . }}'
+}
+# toml_get <file> <key>  -> value of [data].<key> as plain text (true/false/string)
+toml_get() {
+    python3 -I -c '
+import sys, tomllib
+d = tomllib.load(open(sys.argv[1], "rb"))["data"]
+v = d[sys.argv[2]]
+print(str(v).lower() if isinstance(v, bool) else v)' "$1" "$2"
+}
