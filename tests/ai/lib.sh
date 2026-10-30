@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # Shared helpers for tests/ai. Source from test_*.sh; do not execute.
+# shellcheck disable=SC2034  # variables are consumed by the sourcing test scripts
 # Prompt texts are part of the contract with `chezmoi init --promptChoice/--promptBool`
 # (flags are keyed by prompt text, not by data key) and must match home/.chezmoi.toml.tmpl.
 PROMPT_PROFILE="AI profile"
