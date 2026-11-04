@@ -166,5 +166,7 @@
         "command": "npx -y ccstatusline@latest --config ~/.claude/statusline/settings.json",
         "padding": 0,
         "type": "command"
-    }
+    },
+    "theme": "dark",
+    "tui": "fullscreen"
 }
