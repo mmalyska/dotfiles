@@ -107,4 +107,29 @@ for e in "linux false" "linux true" "darwin false" "windows false"; do
     assert_not_contains "workspace scripts not ignored ($e)" "$pats" ".chezmoiscripts/workspace"
 done
 
+# 7. peon-ping (sound packs for an audio relay on the owner's host) is skipped in a remote workspace, and only there
+PEON=".chezmoiscripts/devcontainer/000-peon-ping.sh"
+pats=$("$RENDER" linux true true) || _fail "render_ignore linux true true failed"
+assert_contains "workspace: peon-ping ignored" "$pats" "$PEON"
+pats=$("$RENDER" linux true false) || _fail "render_ignore linux true false failed"
+assert_not_contains "devcontainer without the flag: peon-ping runs" "$pats" "$PEON"
+pats=$("$RENDER" linux true) || _fail "render_ignore linux true (default flag) failed"
+assert_not_contains "default flag is false: peon-ping runs" "$pats" "$PEON"
+if [ "$(uname -s)" = Linux ]; then
+    # real chezmoi on a copy of the tree (.chezmoi.os is the real one): which scripts are managed
+    SRC2="$T/src2"; mkdir -p "$SRC2"
+    cp "$AI_ROOT/.chezmoiroot" "$SRC2/"; cp -R "$AI_ROOT/home" "$SRC2/home"
+    managed() { # fixture-toml
+        chezmoi managed --include=scripts --source "$SRC2" --config "$1" --destination "$T/dest2" \
+            --persistent-state "$T/state2.boltdb" --cache "$T/cache2" </dev/null
+    }
+    out=$(managed "$FIXTURES/legacy-devcontainer.toml") || _fail "chezmoi managed failed (devcontainer)"
+    assert_contains "devcontainer: peon-ping is managed" "$out" "$PEON"
+    out=$(managed "$FIXTURES/remote-workspace-linux.toml") || _fail "chezmoi managed failed (workspace)"
+    assert_not_contains "workspace: peon-ping is not managed" "$out" "$PEON"
+    assert_contains "workspace: the clone script is managed" "$out" ".chezmoiscripts/workspace/200-clone-repos.sh"
+else
+    echo "  SKIP real chezmoi managed (host is not Linux; the render matrix above is the check)"
+fi
+
 echo "  remote workspace: flag, signing key, clones and non-interactive init OK"

@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
-# Usage: render_ignore.sh <linux|darwin|windows> <true|false>
+# Usage: render_ignore.sh <linux|darwin|windows> <true|false> [true|false]   (os, is_devcontainer, is_remote_workspace; default false)
 # Renders a copy of home/.chezmoiignore with .chezmoi.os replaced by the given OS (chezmoi cannot override
 # .chezmoi.os from a fixture) and is_devcontainer set to the second argument. Prints the resulting ignore patterns.
 # Test-only: the real file is never modified, and the copy is checked to differ from it only by that substitution.
 set -euo pipefail
 os=${1:?os}
 devc=${2:?is_devcontainer}
+remote=${3:-false}
 case "$os" in linux|darwin|windows) ;; *) echo "render_ignore: unknown os '$os'" >&2; exit 2;; esac
 case "$devc" in true|false) ;; *) echo "render_ignore: is_devcontainer must be true|false" >&2; exit 2;; esac
+case "$remote" in true|false) ;; *) echo "render_ignore: is_remote_workspace must be true|false" >&2; exit 2;; esac
 root=$(cd "$(dirname "$0")/../.." && pwd)
 src="$root/home/.chezmoiignore"
 tmp=$(mktemp -d)
@@ -24,5 +26,5 @@ if ! diff <(norm "$src") <(norm "$tmp/ignore.tmpl") >/dev/null; then
     exit 1
 fi
 
-printf '[data]\n    is_devcontainer = %s\n' "$devc" > "$tmp/config.toml"
+printf '[data]\n    is_devcontainer = %s\n    is_remote_workspace = %s\n' "$devc" "$remote" > "$tmp/config.toml"
 chezmoi --config "$tmp/config.toml" execute-template < "$tmp/ignore.tmpl" | sed '/^[[:space:]]*$/d'

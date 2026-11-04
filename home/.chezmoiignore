@@ -20,6 +20,9 @@
 .chezmoiscripts/linux/*
 .chezmoiscripts/macos/*
 .chezmoiscripts/windows/*
+{{- if and (hasKey . "is_remote_workspace") .is_remote_workspace }}
+.chezmoiscripts/devcontainer/000-peon-ping.sh
+{{- end }}
 {{- else }}
 .chezmoiscripts/devcontainer/*
 {{- end }}
