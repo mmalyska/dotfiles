@@ -26,3 +26,7 @@
 {{- else }}
 .chezmoiscripts/devcontainer/*
 {{- end }}
+{{- if not (and (hasKey . "is_remote_workspace") .is_remote_workspace) }}
+.codex/AGENTS.md
+.claude/CLAUDE.md
+{{- end }}

@@ -132,4 +132,21 @@ else
     echo "  SKIP real chezmoi managed (host is not Linux; the render matrix above is the check)"
 fi
 
+# 8. the global agent instructions (~/.codex/AGENTS.md and ~/.claude/CLAUDE.md) are managed only in a remote workspace
+for e in "linux false false" "darwin false false" "windows false false" "linux true false"; do
+    # shellcheck disable=SC2086  # intentional word splitting: "<os> <is_devcontainer> <is_remote_workspace>"
+    pats=$("$RENDER" $e) || _fail "render_ignore $e failed"
+    assert_contains "agent instructions ignored without the flag ($e)" "$pats" ".codex/AGENTS.md"
+    assert_contains "claude user memory ignored without the flag ($e)" "$pats" ".claude/CLAUDE.md"
+done
+for e in "linux true true" "linux false true"; do
+    # shellcheck disable=SC2086
+    pats=$("$RENDER" $e) || _fail "render_ignore $e failed"
+    assert_not_contains "agent instructions managed with the flag ($e)" "$pats" ".codex/AGENTS.md"
+    assert_not_contains "claude user memory managed with the flag ($e)" "$pats" ".claude/CLAUDE.md"
+done
+out=$(render remote-workspace-linux home/dot_claude/CLAUDE.md.tmpl) || _fail "render claude user memory"
+assert_contains "claude user memory imports the codex file" "$out" "/.codex/AGENTS.md"
+case "$out" in @/*) ;; *) _fail "claude user memory must start with an absolute @import";; esac
+
 echo "  remote workspace: flag, signing key, clones and non-interactive init OK"
