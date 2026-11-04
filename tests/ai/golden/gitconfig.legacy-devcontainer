@@ -1,0 +1,18 @@
+[filter "lfs"]
+	process = git-lfs filter-process
+	required = true
+	clean = git-lfs clean -- %f
+	smudge = git-lfs smudge -- %f
+[user]
+	name = "Test User"
+	email = "test@example.invalid"
+	signingkey = ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHhoXNF9/VXWVZiH92yUIXTYOLNe1zaKiD/Yuyh3vgIn
+[core]
+	editor = \"code\" --wait
+[gpg]
+	format = ssh
+[commit]
+	gpgsign = true
+[gpg "ssh"]
+[pull]
+	rebase = true

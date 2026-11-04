@@ -5,6 +5,12 @@
 {{- $isWSL := false -}}
 {{- $isArch := false -}}
 {{- $isDevContainer := or (eq .chezmoi.username "vscode") (ne (env "REMOTE_CONTAINERS") "") (ne (env "CODESPACES") "") (ne (env "DEVCONTAINER") "") -}}
+{{- /*
+  Remote workspace (a Coder workspace on Kubernetes): the agent sets CODER=true; REMOTE_WORKSPACE is the manual override.
+  Computed on every init, never prompted. It switches on the workspace SSH signing key and the repository clones
+  (see docs/remote-workspace.md); everything else is unchanged.
+*/ -}}
+{{- $isRemoteWorkspace := or (eq (env "CODER") "true") (ne (env "REMOTE_WORKSPACE") "") -}}
 
 {{- if and (eq .chezmoi.os "linux") (.chezmoi.kernel.osrelease | lower | contains "microsoft") -}}
     {{- $isWSL = true -}}
@@ -48,6 +54,7 @@
     is_arch       = {{ $isArch }}
     is_work       = {{ $isWork }}
     is_devcontainer = {{ $isDevContainer }}
+    is_remote_workspace = {{ $isRemoteWorkspace }}
     ai_profile      = {{ $aiProfile | quote }}
     ai_agent_teams  = {{ $aiTeams }}
     ai_claude       = {{ $aiClaude }}

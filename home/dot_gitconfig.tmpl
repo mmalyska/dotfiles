@@ -6,7 +6,11 @@
 [user]
 	name = "{{ .user }}"
 	email = "{{ .email }}"
+	{{- if and (hasKey . "is_remote_workspace") .is_remote_workspace .remote_workspace.signing_key }}
+	signingkey = {{ .remote_workspace.signing_key }}
+	{{- else }}
 	signingkey = ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHhoXNF9/VXWVZiH92yUIXTYOLNe1zaKiD/Yuyh3vgIn
+	{{- end }}
 [core]
 	editor = \"code\" --wait
 	{{- if eq .chezmoi.os "windows" }}

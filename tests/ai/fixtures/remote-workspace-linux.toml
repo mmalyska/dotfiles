@@ -1,0 +1,10 @@
+[data]
+    email = "t@example.invalid"
+    user = "T"
+    is_work = false
+    is_wsl = false
+    is_arch = false
+    is_devcontainer = true
+    is_remote_workspace = true
+    [data.remote_workspace]
+        signing_key = "ssh-ed25519 AAAATESTKEY"
