@@ -46,10 +46,11 @@ script therefore lives in `home/.chezmoiscripts/workspace/`, not in `devcontaine
 
 `tests/ai/test_remote_workspace.sh` (part of `tests/ai/run.sh`, no network, `git` and `gh` are stubs) checks that the gitconfig is
 byte-identical to `tests/ai/golden/gitconfig.*` with the flag unset, that the key and the clones appear with it set, that the script
-skips, clones and reports failures correctly, that no ignore pattern hides it, and that `chezmoi init --promptDefaults` without a TTY follows the environment.
+skips, clones and reports failures correctly, that no ignore pattern hides it, that peon-ping is skipped only in a workspace, and that `chezmoi init --promptDefaults` without a TTY follows the environment.
 
-## Not changed on purpose
+## peon-ping is skipped in a workspace
 
-The `devcontainer/run_once_000-peon-ping.sh` sound-pack install still runs in a workspace, although the audio relay it needs is on
-the owner's host and unreachable from a pod. Skipping it needs a change to `home/.chezmoiignore`, which has its own strict test;
-decide separately.
+The `devcontainer/run_once_000-peon-ping.sh` sound-pack install needs an audio relay on the owner's host, which a pod cannot reach, so
+`home/.chezmoiignore` ignores it when `is_remote_workspace` is set (in addition to the devcontainer rule). Other devcontainers keep
+it. It also registers Claude Code hooks in `settings.json`; skipping the script removes that overhead from every tool call.
+A home volume that already ran it keeps the installed hooks: remove them with `bash ~/.claude/hooks/peon-ping/uninstall.sh`.
