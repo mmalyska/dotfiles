@@ -1,0 +1,16 @@
+# Static data for a remote workspace (a Coder workspace on Kubernetes). Used only when the config sets
+# is_remote_workspace (CODER=true or REMOTE_WORKSPACE set at `chezmoi init`); every other host ignores it.
+# See docs/remote-workspace.md. Public data only: no tokens, no private keys, no hostnames.
+remote_workspace:
+  # Public half of the workspace's dedicated SSH signing key (the private half lives in the workspace's BWS project
+  # and is loaded into an in-pod ssh-agent). If this is emptied, user.signingkey keeps the value from
+  # dot_gitconfig.tmpl, which is the owner's own key and cannot sign inside the workspace.
+  signing_key: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICssZkG/1gq5fCOudUfaLIzrGB+vVkn7r6wsQUGo5C8M"
+  # Where repositories are cloned: /workspaces/<name>, the same layout as a local devcontainer.
+  root: /workspaces
+  # GitHub repositories (owner/name) cloned when missing. Existing directories are never touched.
+  repositories:
+    - mmalyska/home-ops
+    - mmalyska/containers
+    - mmalyska/claude-plugins
+    - mmalyska/dotfiles

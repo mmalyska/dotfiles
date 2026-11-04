@@ -2,7 +2,7 @@
 # shellcheck disable=SC2016  # canary script bodies are intentionally single-quoted
 # T13 layer A: fresh-environment end-to-end on stub CLIs. Deterministic, offline; every scenario is PASS or FAIL (never NOT RUN).
 # Each cell is a real `chezmoi init --apply` into a throw-away HOME on a copy of the tree WITHOUT the system scripts
-# (linux/macos/windows/devcontainer, run_once_*), so no sudo/pacman/brew can run. Native CLIs: tests/ai/e2e-native.sh.
+# (linux/macos/windows/devcontainer/workspace, run_once_*), so no sudo/pacman/brew can run. Native CLIs: tests/ai/e2e-native.sh.
 . "$(dirname "$0")/lib.sh"
 
 T=$(new_tmp)
@@ -12,7 +12,7 @@ real_before=$(real_sums); repo_before=$(git -C "$AI_ROOT" status --porcelain 2>/
 
 SRC="$T/src"; mkdir -p "$SRC"
 rsync -a --exclude .git --exclude .worktrees "$AI_ROOT/" "$SRC/"
-rm -rf "$SRC"/home/.chezmoiscripts/{linux,macos,windows,devcontainer}
+rm -rf "$SRC"/home/.chezmoiscripts/{linux,macos,windows,devcontainer,workspace}
 find "$SRC/home" -maxdepth 1 -name 'run_once_*' -delete
 printf '#!/usr/bin/env bash\necho once >> "$AI_TEST_CANARY"\n' > "$SRC/home/.chezmoiscripts/run_once_canary-once.sh"
 printf '#!/usr/bin/env bash\necho onchange >> "$AI_TEST_CANARY"\n' > "$SRC/home/.chezmoiscripts/run_onchange_canary-onchange.sh"

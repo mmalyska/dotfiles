@@ -1,0 +1,32 @@
+{{- if and (hasKey . "is_remote_workspace") .is_remote_workspace -}}
+#!/usr/bin/env bash
+# Clone the repositories of a remote workspace that are not there yet (docs/remote-workspace.md).
+# Renders to nothing, so chezmoi skips it, on every host that is not a remote workspace.
+# Re-runs when the repository list changes: {{ .remote_workspace.repositories | toJson | sha256sum }}
+# A failed clone is reported and does not stop the rest of the apply; existing directories are never touched.
+set -u
+root={{ .remote_workspace.root | quote }}
+mkdir -p "$root" 2>/dev/null || true
+
+clone_missing() {
+    repo="$1"
+    dest="$root/${repo##*/}"
+    if [ -e "$dest" ]; then
+        echo "clone-repos: $dest exists, skipped"
+        return 0
+    fi
+    # gh authenticates with GITHUB_TOKEN when it is set (private repositories); git over HTTPS is the fallback.
+    if command -v gh >/dev/null 2>&1 && gh repo clone "$repo" "$dest" -- --quiet 2>/dev/null; then
+        echo "clone-repos: cloned $repo"
+    elif git clone --quiet "https://github.com/$repo.git" "$dest" 2>/dev/null; then
+        echo "clone-repos: cloned $repo"
+    else
+        rm -rf "$dest"
+        echo "clone-repos: FAILED to clone $repo" >&2
+    fi
+}
+{{ range .remote_workspace.repositories }}
+clone_missing {{ . | quote }}
+{{- end }}
+exit 0
+{{- end }}
