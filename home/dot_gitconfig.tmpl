@@ -26,3 +26,8 @@
 	{{- end }}
 [pull]
 	rebase = true
+{{- if and (hasKey . "is_remote_workspace") .is_remote_workspace }}
+[credential "https://github.com"]
+	helper =
+	helper = !gh auth git-credential
+{{- end }}

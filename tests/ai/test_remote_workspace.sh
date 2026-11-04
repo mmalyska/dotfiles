@@ -149,4 +149,13 @@ out=$(render remote-workspace-linux home/dot_claude/CLAUDE.md.tmpl) || _fail "re
 assert_contains "claude user memory imports the codex file" "$out" "/.codex/AGENTS.md"
 case "$out" in @/*) ;; *) _fail "claude user memory must start with an absolute @import";; esac
 
+# 9. git pushes over HTTPS in a remote workspace use gh's credential helper (it reads GITHUB_TOKEN from the environment, so
+# no token is written to disk); the reset line first drops any helper inherited from a system or global config
+out=$(render remote-workspace-linux home/dot_gitconfig.tmpl) || _fail "render gitconfig, flag set (credential)"
+assert_contains "workspace: github.com uses the gh credential helper" "$out" '[credential "https://github.com"]'
+assert_contains "workspace: gh auth git-credential" "$out" "helper = !gh auth git-credential"
+assert_eq "workspace: the helper list is reset first" "$(printf '%s\n' "$out" | grep -A2 'credential "https' | sed -n 2p | tr -d '[:space:]')" "helper="
+out=$(render legacy-linux home/dot_gitconfig.tmpl) || _fail "render gitconfig, flag unset (credential)"
+assert_not_contains "no credential section without the flag" "$out" "[credential"
+
 echo "  remote workspace: flag, signing key, clones and non-interactive init OK"
