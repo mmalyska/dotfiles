@@ -4,7 +4,6 @@
 # before the feature, and the clone script renders to nothing. No network: git and gh are stubs.
 . "$(dirname "$0")/lib.sh"
 
-GITCONFIG="$AI_ROOT/home/dot_gitconfig.tmpl"
 CLONE="$AI_ROOT/home/.chezmoiscripts/devcontainer/run_onchange_after_200-clone-repos.sh.tmpl"
 DATA="$AI_ROOT/home/.chezmoidata/remote-workspace.yaml"
 DEFAULT_KEY="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHhoXNF9/VXWVZiH92yUIXTYOLNe1zaKiD/Yuyh3vgIn"
@@ -62,7 +61,10 @@ out=$(render remote-workspace-linux "${CLONE#"$AI_ROOT"/}")
 printf '%s\n' "$out" | sed "s|^root=.*|root=\"$T/root\"|" > "$T/clone.sh"
 mkdir -p "$T/root/claude-plugins"                      # already there: must be left alone
 printf 'keep' > "$T/root/claude-plugins/marker"
-sed -i.bak 's|^exit 0$|clone_missing "someone/fails-in-gh"   # fails in gh, then in git\nexit 0|' "$T/clone.sh"
+# add a clone that fails in gh and then in git, before the final `exit 0` (portable: no sed -i, no \n in a replacement)
+grep -v '^exit 0$' "$T/clone.sh" > "$T/clone2.sh"
+printf 'clone_missing "someone/fails-in-gh"\nexit 0\n' >> "$T/clone2.sh"
+mv "$T/clone2.sh" "$T/clone.sh"
 grep -q 'fails-in-gh' "$T/clone.sh" || _fail "test setup: the failing clone was not added"
 export STUB_LOG="$T/log"; : > "$STUB_LOG"
 res=$(PATH="$T/bin:$PATH" bash "$T/clone.sh" 2>&1); rc=$?
@@ -83,7 +85,7 @@ init_cfg() { # cfg [env assignments...]
     env -u CODER -u REMOTE_WORKSPACE "$@" timeout 30 chezmoi init --source "$SRC" --config "$cfg" --destination "$T/dest" \
         --cache "$T/cache" --persistent-state "$T/state.boltdb" --promptDefaults </dev/null
 }
-flag_of() { grep -E '^\s*is_remote_workspace\s*=' "$1" | sed 's/.*= *//'; }
+flag_of() { grep -E '^[[:space:]]*is_remote_workspace[[:space:]]*=' "$1" | sed 's/.*= *//'; }
 init_cfg "$T/a.toml" || _fail "init without the flag"
 assert_eq "init: flag false by default" "$(flag_of "$T/a.toml")" "false"
 init_cfg "$T/b.toml" CODER=true || _fail "init with CODER=true"
