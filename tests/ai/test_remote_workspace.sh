@@ -4,7 +4,7 @@
 # before the feature, and the clone script renders to nothing. No network: git and gh are stubs.
 . "$(dirname "$0")/lib.sh"
 
-CLONE="$AI_ROOT/home/.chezmoiscripts/devcontainer/run_onchange_after_200-clone-repos.sh.tmpl"
+CLONE="$AI_ROOT/home/.chezmoiscripts/workspace/run_onchange_after_200-clone-repos.sh.tmpl"
 DATA="$AI_ROOT/home/.chezmoidata/remote-workspace.yaml"
 DEFAULT_KEY="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHhoXNF9/VXWVZiH92yUIXTYOLNe1zaKiD/Yuyh3vgIn"
 
@@ -97,5 +97,14 @@ assert_eq "init: CODER=false leaves the flag off" "$(flag_of "$T/d.toml")" "fals
 assert_eq "init: the AI defaults are unchanged by the flag" \
     "$(grep -E 'ai_profile' "$T/b.toml")" "$(grep -E 'ai_profile' "$T/a.toml")"
 assert_eq "init did not touch the repository" "$(git -C "$AI_ROOT" status --porcelain 2>/dev/null | sha256sum)" "$BEFORE"
+
+# 6. the clone script does not depend on a devcontainer: no environment's ignore patterns hide the workspace/ scripts
+# (the script itself renders to nothing unless the flag is set, so it needs no ignore rule)
+RENDER="$AI_ROOT/tests/ai/render_ignore.sh"
+for e in "linux false" "linux true" "darwin false" "windows false"; do
+    # shellcheck disable=SC2086  # intentional word splitting: "<os> <is_devcontainer>"
+    pats=$("$RENDER" $e) || _fail "render_ignore $e failed"
+    assert_not_contains "workspace scripts not ignored ($e)" "$pats" ".chezmoiscripts/workspace"
+done
 
 echo "  remote workspace: flag, signing key, clones and non-interactive init OK"

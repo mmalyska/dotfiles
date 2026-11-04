@@ -25,7 +25,7 @@ prompt text, for example `--promptString "Email address for git=you@example.org"
 | Where | With the flag unset | With the flag set |
 | ----- | ------------------- | ----------------- |
 | `home/dot_gitconfig.tmpl`, `user.signingkey` | the owner's own public key | `remote_workspace.signing_key` from `home/.chezmoidata/remote-workspace.yaml`, when it is not empty; otherwise unchanged |
-| `home/.chezmoiscripts/devcontainer/run_onchange_after_200-clone-repos.sh.tmpl` | renders to nothing, so chezmoi skips it | clones every repository in `remote_workspace.repositories` that is missing, to `/workspaces/<name>` |
+| `home/.chezmoiscripts/workspace/run_onchange_after_200-clone-repos.sh.tmpl` | renders to nothing, so chezmoi skips it | clones every repository in `remote_workspace.repositories` that is missing, to `/workspaces/<name>` |
 
 **Signing key.** The workspace has its own dedicated SSH signing key (public half already in the data file). Its private half is in the workspace's Bitwarden project and
 is loaded into an in-pod `ssh-agent` by the Coder template; this repository holds only the public half. Put the public key (one
@@ -36,11 +36,17 @@ the workspace, so commits fail loudly instead of being signed by the wrong key.
 private repositories) and falls back to `git clone` over HTTPS. A directory that already exists is never touched, and a failed
 clone is reported on stderr without stopping the apply. The script re-runs when the list changes.
 
+## No `.devcontainer` flow
+
+A remote workspace serves several repositories and does not run a repository's `.devcontainer` lifecycle scripts. The clone
+script therefore lives in `home/.chezmoiscripts/workspace/`, not in `devcontainer/`, so it does not depend on `is_devcontainer`
+(which is true for any user named `vscode`). Per-repository setup is done by hand for now.
+
 ## Tests
 
 `tests/ai/test_remote_workspace.sh` (part of `tests/ai/run.sh`, no network, `git` and `gh` are stubs) checks that the gitconfig is
 byte-identical to `tests/ai/golden/gitconfig.*` with the flag unset, that the key and the clones appear with it set, that the script
-skips, clones and reports failures correctly, and that `chezmoi init --promptDefaults` without a TTY follows the environment.
+skips, clones and reports failures correctly, that no ignore pattern hides it, and that `chezmoi init --promptDefaults` without a TTY follows the environment.
 
 ## Not changed on purpose
 
