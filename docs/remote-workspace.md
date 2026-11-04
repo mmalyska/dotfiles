@@ -27,8 +27,9 @@ prompt text, for example `--promptString "Email address for git=you@example.org"
 | `home/dot_gitconfig.tmpl`, `user.signingkey` | the owner's own public key | `remote_workspace.signing_key` from `home/.chezmoidata/remote-workspace.yaml`, when it is not empty; otherwise unchanged |
 | `home/dot_gitconfig.tmpl`, `[credential "https://github.com"]` | not set | `gh auth git-credential` is the helper, so `git push` over HTTPS uses `GITHUB_TOKEN` from the environment (the template exports it from BWS). Nothing is written to disk; the empty `helper =` line first drops any inherited helper |
 | `home/.chezmoiscripts/workspace/run_onchange_after_200-clone-repos.sh.tmpl` | renders to nothing, so chezmoi skips it | clones every repository in `remote_workspace.repositories` that is missing, to `/workspaces/<name>` |
-| `home/dot_codex/AGENTS.md` (`~/.codex/AGENTS.md`) | not managed | global agent instructions for any directory: all work goes in `/workspaces`, read `/workspaces/AGENTS.md` first. Codex reads it in every session |
-| `home/dot_claude/CLAUDE.md.tmpl` (`~/.claude/CLAUDE.md`) | not managed | one line importing `~/.codex/AGENTS.md`, so Claude Code gets the same text in any directory |
+| `home/AGENTS.md` (`~/AGENTS.md`) | not managed | the one real copy of the global agent instructions for any directory: all work goes in `/workspaces`, read `/workspaces/AGENTS.md` first |
+| `home/dot_codex/symlink_AGENTS.md.tmpl` (`~/.codex/AGENTS.md`) | not managed | a symlink to `~/AGENTS.md`: Codex reads its global file in every session and does not support `@` imports, but follows symlinks |
+| `home/dot_claude/CLAUDE.md.tmpl` (`~/.claude/CLAUDE.md`) | not managed | one line importing `~/AGENTS.md`, so Claude Code gets the same text in any directory (its always-loaded user file is `CLAUDE.md`) |
 
 **Signing key.** The workspace has its own dedicated SSH signing key (public half already in the data file). Its private half is in the workspace's Bitwarden project and
 is loaded into an in-pod `ssh-agent` by the Coder template; this repository holds only the public half. Put the public key (one

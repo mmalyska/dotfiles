@@ -1,4 +1,4 @@
-# Global workspace instructions
+# Global workspace instructions (shared by Claude Code and Codex)
 
 You are running in a Coder workspace, a Kubernetes pod. These instructions apply in any directory.
 
