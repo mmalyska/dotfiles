@@ -132,22 +132,30 @@ else
     echo "  SKIP real chezmoi managed (host is not Linux; the render matrix above is the check)"
 fi
 
-# 8. the global agent instructions (~/.codex/AGENTS.md and ~/.claude/CLAUDE.md) are managed only in a remote workspace
+# 8. the global agent instructions (~/AGENTS.md, the ~/.codex/AGENTS.md symlink and ~/.claude/CLAUDE.md) are managed only in a
+# remote workspace. Exact-line matches: "AGENTS.md" is also a substring of ".codex/AGENTS.md".
+has_line() { printf '%s\n' "$1" | grep -qxF -- "$2"; }
 for e in "linux false false" "darwin false false" "windows false false" "linux true false"; do
     # shellcheck disable=SC2086  # intentional word splitting: "<os> <is_devcontainer> <is_remote_workspace>"
     pats=$("$RENDER" $e) || _fail "render_ignore $e failed"
-    assert_contains "agent instructions ignored without the flag ($e)" "$pats" ".codex/AGENTS.md"
-    assert_contains "claude user memory ignored without the flag ($e)" "$pats" ".claude/CLAUDE.md"
+    for f in AGENTS.md .codex/AGENTS.md .claude/CLAUDE.md; do
+        has_line "$pats" "$f" || _fail "$f must be ignored without the flag ($e)"
+    done
 done
 for e in "linux true true" "linux false true"; do
     # shellcheck disable=SC2086
     pats=$("$RENDER" $e) || _fail "render_ignore $e failed"
-    assert_not_contains "agent instructions managed with the flag ($e)" "$pats" ".codex/AGENTS.md"
-    assert_not_contains "claude user memory managed with the flag ($e)" "$pats" ".claude/CLAUDE.md"
+    for f in AGENTS.md .codex/AGENTS.md .claude/CLAUDE.md; do
+        has_line "$pats" "$f" && _fail "$f must be managed with the flag ($e)"
+    done
 done
 out=$(render remote-workspace-linux home/dot_claude/CLAUDE.md.tmpl) || _fail "render claude user memory"
-assert_contains "claude user memory imports the codex file" "$out" "/.codex/AGENTS.md"
-case "$out" in @/*) ;; *) _fail "claude user memory must start with an absolute @import";; esac
+case "$out" in @/*/AGENTS.md) ;; *) _fail "claude user memory must be one absolute @import of ~/AGENTS.md (got: $out)";; esac
+assert_not_contains "claude user memory no longer points at the codex file" "$out" ".codex"
+out=$(render remote-workspace-linux home/dot_codex/symlink_AGENTS.md.tmpl) || _fail "render codex symlink"
+case "$out" in /*/AGENTS.md) ;; *) _fail "the codex symlink must point at an absolute ~/AGENTS.md (got: $out)";; esac
+[ -f "$AI_ROOT/home/AGENTS.md" ] || _fail "home/AGENTS.md (the real global file) is missing"
+[ ! -e "$AI_ROOT/home/dot_codex/AGENTS.md" ] || _fail "home/dot_codex/AGENTS.md must be the symlink template, not a second copy"
 
 # 9. git pushes over HTTPS in a remote workspace use gh's credential helper (it reads GITHUB_TOKEN from the environment, so
 # no token is written to disk); the reset line first drops any helper inherited from a system or global config
