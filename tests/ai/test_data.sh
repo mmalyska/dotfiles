@@ -5,7 +5,7 @@
 for f in legacy-linux legacy-darwin legacy-windows legacy-devcontainer; do
     sha=$(chezmoi --source "$AI_ROOT" --config "$FIXTURES/$f.toml" execute-template \
         '{{ .ai_workflow.marketplace.own.accepted_sha }}') || _fail "$f: data not available in templates"
-    assert_eq "accepted_sha ($f)" "$sha" 1a0724307063084cc05de58096032dee2c00490a
+    assert_eq "accepted_sha ($f)" "$sha" 4075ee1488b11214421dffc1ec8c9351193f6ff9
 done
 
 data=$(chezmoi --source "$AI_ROOT" --config "$FIXTURES/legacy-linux.toml" data --format json) \

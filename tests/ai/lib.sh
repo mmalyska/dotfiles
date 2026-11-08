@@ -84,7 +84,7 @@ BASE_PATH=/usr/bin:/bin
 TIMEOUT=$(command -v timeout || command -v gtimeout || echo timeout)
 OWN=mmalyska-claude-plugins
 OFFICIAL=claude-plugins-official
-SHA=1a0724307063084cc05de58096032dee2c00490a
+SHA=4075ee1488b11214421dffc1ec8c9351193f6ff9
 CLAUDE_TPL=home/.chezmoiscripts/ai/run_onchange_after_100-claude-plugins.sh.tmpl
 # render_script <fixture> <path> -> file with the rendered installer
 render_script() {
