@@ -5,7 +5,7 @@
 for f in legacy-linux legacy-darwin legacy-windows legacy-devcontainer; do
     sha=$(chezmoi --source "$AI_ROOT" --config "$FIXTURES/$f.toml" execute-template \
         '{{ .ai_workflow.marketplace.own.accepted_sha }}') || _fail "$f: data not available in templates"
-    assert_eq "accepted_sha ($f)" "$sha" 25d785abee26ca7a3c87e8311f46e8a90f225301
+    assert_eq "accepted_sha ($f)" "$sha" 1a0724307063084cc05de58096032dee2c00490a
 done
 
 data=$(chezmoi --source "$AI_ROOT" --config "$FIXTURES/legacy-linux.toml" data --format json) \
@@ -15,7 +15,7 @@ import json, re, sys
 d = json.load(sys.stdin)["ai_workflow"]
 m, p, pr = d["marketplace"]["own"], d["plugins"], d["profiles"]
 assert re.fullmatch(r"[0-9a-f]{40}", m["accepted_sha"]), "accepted_sha must be 40 hex"
-assert m["accepted_tag"] in ("", "ai-workflow-v0.1.0-preview.1"), "unexpected accepted_tag"
+assert re.fullmatch(r"(ai-workflow-v[0-9][0-9A-Za-z.-]*)?", m["accepted_tag"]), "unexpected accepted_tag"
 assert m["pin_mode"] in ("verify", "tag"), "pin_mode"
 assert len(p["own"]) == 12 and len(set(p["own"])) == 12, "own must be 12 unique"
 assert len(p["workflow"]) == 2 and len(set(p["workflow"])) == 2, "workflow must be 2 unique"
