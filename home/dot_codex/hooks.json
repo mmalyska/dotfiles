@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "[ -x ~/.local/bin/ai-workflow-doctor ] && ~/.local/bin/ai-workflow-doctor --hook || true",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

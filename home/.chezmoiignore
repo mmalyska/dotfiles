@@ -1,4 +1,5 @@
 {{- if eq .chezmoi.os "windows" }}
+.codex/hooks.json
 .chezmoiscripts/linux/*
 .chezmoiscripts/macos/*
 .chezmoiscripts/ai/100-claude-plugins.sh
@@ -30,4 +31,7 @@
 AGENTS.md
 .codex/AGENTS.md
 .claude/CLAUDE.md
+{{- end }}
+{{- if and (hasKey . "ai_codex") (not .ai_codex) }}
+.codex/hooks.json
 {{- end }}
