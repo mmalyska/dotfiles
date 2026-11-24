@@ -27,6 +27,7 @@ prompt text, for example `--promptString "Email address for git=you@example.org"
 | `home/dot_gitconfig.tmpl`, `user.signingkey` | the owner's own public key | `remote_workspace.signing_key` from `home/.chezmoidata/remote-workspace.yaml`, when it is not empty; otherwise unchanged |
 | `home/dot_gitconfig.tmpl`, `[credential "https://github.com"]` | not set | `gh auth git-credential` is the helper, so `git push` over HTTPS uses `GITHUB_TOKEN` from the environment (the template exports it from BWS). Nothing is written to disk; the empty `helper =` line first drops any inherited helper |
 | `home/.chezmoiscripts/workspace/run_onchange_after_200-clone-repos.sh.tmpl` | renders to nothing, so chezmoi skips it | clones every repository in `remote_workspace.repositories` that is missing, to `/workspaces/<name>` |
+| `home/.chezmoiscripts/workspace/run_onchange_after_210-workspace-agents-md.sh.tmpl` | renders to nothing, so chezmoi skips it | writes `/workspaces/AGENTS.md` from `home/.chezmoitemplates/workspace-agents.md` and `home/.chezmoidata/workspace-inventory.yaml` (see "Workspace AGENTS.md") |
 | `home/AGENTS.md` (`~/AGENTS.md`) | not managed | the one real copy of the global agent instructions for any directory: all work goes in `/workspaces`, read `/workspaces/AGENTS.md` first |
 | `home/dot_codex/symlink_AGENTS.md.tmpl` (`~/.codex/AGENTS.md`) | not managed | a symlink to `~/AGENTS.md`: Codex reads its global file in every session and does not support `@` imports, but follows symlinks |
 | `home/dot_claude/CLAUDE.md.tmpl` (`~/.claude/CLAUDE.md`) | not managed | one line importing `~/AGENTS.md`, so Claude Code gets the same text in any directory (its always-loaded user file is `CLAUDE.md`) |
@@ -40,6 +41,26 @@ the workspace, so commits fail loudly instead of being signed by the wrong key.
 private repositories) and falls back to `git clone` over HTTPS. A directory that already exists is never touched, and a failed
 clone is reported on stderr without stopping the apply. The script re-runs when the list changes.
 
+## Workspace AGENTS.md
+
+`/workspaces/AGENTS.md` is the first file an agent reads in a workspace (`~/AGENTS.md` says so). It used to be a plain file on the
+`/workspaces` volume that no repository tracked, so it went stale (it still named Ubuntu 24.04 and listed neither the Jetson fork nor
+the permissions the workspace really has) and agents guessed. It is now generated:
+
+- **Text:** `home/.chezmoitemplates/workspace-agents.md`: the environment, persistence, what the workspace can and cannot do, secrets
+  and the working conventions. Statements that can change carry a command to check them.
+- **Repositories:** one section per entry of `remote_workspace.repositories` (the clone list), with the description from
+  `workspace_inventory.cloned` in `home/.chezmoidata/workspace-inventory.yaml`, plus the active repositories that are not cloned
+  (`workspace_inventory.other`). Rendering fails when a cloned repository has no description, so the inventory cannot drift from the
+  clone list. Write a purpose only from the repository's own README or GitHub description.
+- **Applying:** the script writes the file when its content changes (`chezmoi apply`), never touches it otherwise, and replaces a
+  hand edit. The first time it meets a file that it did not generate, it keeps that file as `/workspaces/AGENTS.md.pre-chezmoi`.
+- **Public:** this repository is public, so the file never holds a hostname, an address, a token or a private repository name
+  (`tests/ai/test_workspace_agents.sh` checks the generated text for them).
+
+To change the file, change the template or the data and open a PR; do not edit `/workspaces/AGENTS.md`. To describe a new
+repository, add it to `remote_workspace.repositories` and give it an entry under `workspace_inventory.cloned`.
+
 ## No `.devcontainer` flow
 
 A remote workspace serves several repositories and does not run a repository's `.devcontainer` lifecycle scripts. The clone
@@ -47,6 +68,10 @@ script therefore lives in `home/.chezmoiscripts/workspace/`, not in `devcontaine
 (which is true for any user named `vscode`). Per-repository setup is done by hand for now.
 
 ## Tests
+
+`tests/ai/test_workspace_agents.sh` covers the generated `/workspaces/AGENTS.md` (written only with the flag set, one section per
+repository, idempotent, replaces stale content and keeps the first hand-written copy, no hostname or token, a repository without a
+description fails the render).
 
 `tests/ai/test_remote_workspace.sh` (part of `tests/ai/run.sh`, no network, `git` and `gh` are stubs) checks that the gitconfig is
 byte-identical to `tests/ai/golden/gitconfig.*` with the flag unset, that the key and the clones appear with it set, that the script
