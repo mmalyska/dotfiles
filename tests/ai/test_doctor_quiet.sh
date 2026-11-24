@@ -110,4 +110,14 @@ assert_eq "(8) no repo rc" "$RC" "0"; assert_eq "(8) no repo output" "$OUT" ""
 rm -rf "$T/origin.git"; : > "$H/.local/state/ai-workflow/source-fetch"
 age_stamp
 run --quiet; assert_eq "(8) unreachable remote rc" "$RC" "0"; assert_not_contains "(8) no git noise" "$OUT" "fatal"
+
+# (9) a remote that hangs does not hold the session up: the fetch is cut off after about 4 seconds, with no timeout command
+git_in "$T/src" remote set-url origin 'ext::sleep 30'
+age_stamp
+start=$(date +%s)
+OUT=$(env HOME="$H" PATH="$STUBS:$BASE_PATH" STUB_STATE="$STATE" GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=protocol.ext.allow GIT_CONFIG_VALUE_0=always \
+    bash "$T/doctor.sh" --quiet 2>&1); RC=$?
+elapsed=$(( $(date +%s) - start ))
+assert_eq "(9) hanging remote rc" "$RC" "0"
+[ "$elapsed" -le 8 ] || _fail "(9) the fetch was not cut off: took ${elapsed}s"
 :
