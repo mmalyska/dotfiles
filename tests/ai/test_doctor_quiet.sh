@@ -35,6 +35,7 @@ push_pin() { # <sha> <tag>: a new pin on origin, through the seed repository
 
 sed "s#^ACCEPTED_SHA=.*#ACCEPTED_SHA=\"$HEAD_SHA\"#; s#^SOURCE_DIR=.*#SOURCE_DIR=\"$T/src\"#" "$T/doctor.tpl.sh" > "$T/doctor.sh"
 bash -n "$T/doctor.sh" || _fail "bash -n"
+age_stamp() { python3 -I -c 'import os,sys,time; t=time.time()-7*3600; os.utime(sys.argv[1],(t,t))' "$H/.local/state/ai-workflow/source-fetch"; }
 run() { # <args...>: sets OUT and RC; STUB_STATE from $STATE
     OUT=$(env -u XDG_STATE_HOME -u CLAUDE_CONFIG_DIR -u CODEX_HOME HOME="$H" PATH="$STUBS:$BASE_PATH" STUB_STATE="$STATE" bash "$T/doctor.sh" "$@" 2>&1); RC=$?
 }
@@ -68,7 +69,7 @@ msg=$(valid_json "$OUT") || _fail "(2) hook output is not the expected JSON: $OU
 assert_contains "(2) hook message" "$msg" "git-workflows 1.3.11->1.3.12"
 run --strict; assert_eq "(2) strict rc" "$RC" "1"; assert_contains "(2) pending section" "$OUT" "[pending]"
 # the same version is fine
-STATE="$T/both-ok.json"; sed -i 's/1.3.12/1.3.11/' "$MK/plugins/git-workflows/.claude-plugin/plugin.json"
+STATE="$T/both-ok.json"; printf '{\n  "name": "git-workflows",\n  "version": "1.3.11"\n}\n' > "$MK/plugins/git-workflows/.claude-plugin/plugin.json"
 STATE="$T/state-old.json"; run --quiet; assert_eq "(2) equal versions" "$OUT" ""
 
 # (3) the source accepts another revision than the one this host runs (pulled, not applied)
@@ -90,7 +91,7 @@ run --hook; valid_json "$OUT" >/dev/null || _fail "(4) hook JSON: $OUT"
 # (5) the fetch is throttled: a newer pin is not seen until the stamp is old
 push_pin dddddddddddddddddddddddddddddddddddddddd ai-workflow-v9.9.10
 run --quiet; assert_not_contains "(5) throttled" "$OUT" "v9.9.10"
-touch -d '7 hours ago' "$H/.local/state/ai-workflow/source-fetch"
+age_stamp
 run --quiet; assert_contains "(5) refetched" "$OUT" "ai-workflow-v9.9.10"
 
 # (6) the full report never fetches or looks at the remote: with a fresh stamp removed, it makes no stamp
@@ -107,6 +108,6 @@ sed "s#^SOURCE_DIR=.*#SOURCE_DIR=\"$T/not-a-repo\"#" "$T/doctor.sh" > "$T/doctor
 OUT=$(env HOME="$H" PATH="$STUBS:$BASE_PATH" STUB_STATE="$STATE" bash "$T/doctor.norepo.sh" --quiet 2>&1); RC=$?
 assert_eq "(8) no repo rc" "$RC" "0"; assert_eq "(8) no repo output" "$OUT" ""
 rm -rf "$T/origin.git"; : > "$H/.local/state/ai-workflow/source-fetch"
-touch -d '7 hours ago' "$H/.local/state/ai-workflow/source-fetch"
+age_stamp
 run --quiet; assert_eq "(8) unreachable remote rc" "$RC" "0"; assert_not_contains "(8) no git noise" "$OUT" "fatal"
 :
