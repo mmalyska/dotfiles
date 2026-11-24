@@ -148,11 +148,11 @@ pin_of() { sed -n "s/^ *$1: *//p" | head -n 1; }
 FETCH_EVERY=360
 refresh_upstream() {
     local stamp="$STATE_DIR/source-fetch"
-    command -v timeout >/dev/null 2>&1 || return 0
+    local to; to=$(command -v timeout || command -v gtimeout) || return 0
     git -C "$SOURCE_DIR" rev-parse --verify -q '@{upstream}' >/dev/null 2>&1 || return 0
     if [ -e "$stamp" ] && [ -z "$(find "$stamp" -mmin +"$FETCH_EVERY" 2>/dev/null)" ]; then return 0; fi
     mkdir -p "$STATE_DIR" 2>/dev/null && : > "$stamp"
-    GIT_TERMINAL_PROMPT=0 timeout 4 git -C "$SOURCE_DIR" fetch --quiet >/dev/null 2>&1 || true
+    GIT_TERMINAL_PROMPT=0 "$to" 4 git -C "$SOURCE_DIR" fetch --quiet >/dev/null 2>&1 || true
 }
 
 # plugin_versions <json>: "<id> <version>" lines from `claude plugin list --json`
