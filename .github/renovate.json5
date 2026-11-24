@@ -7,7 +7,7 @@
     {
       "customType": "regex",
       "description": "The accepted claude-plugins revision: tag and commit move together (docs/workflow/acceptance.md)",
-      "fileMatch": ["^home/\\.chezmoidata/ai-workflow\\.yaml$"],
+      "managerFilePatterns": ["/^home/\\.chezmoidata/ai-workflow\\.yaml$/"],
       "matchStrings": [
         "(?<indentation>[ \\t]+)accepted_sha: (?<currentDigest>[0-9a-f]{40})\\n(?<between>(?:[ \\t]*#[^\\n]*\\n)*)[ \\t]+accepted_tag: (?<currentValue>ai-workflow-v[0-9.]+)"
       ],
