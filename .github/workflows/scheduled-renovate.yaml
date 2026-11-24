@@ -1,0 +1,40 @@
+---
+name: Renovate
+
+# Runs the shared Renovate workflow (the same one home-ops uses) for this repository.
+# Needs the repository secrets BOT_APP_ID and BOT_APP_PRIVATE_KEY of the bendo-bot GitHub App,
+# and the app must be installed on this repository.
+
+on:
+  workflow_dispatch:
+    inputs:
+      dryRun:
+        description: "Dry-Run"
+        default: "false"
+        required: false
+      logLevel:
+        description: "Log-Level"
+        default: "debug"
+        required: false
+  schedule:
+    - cron: "30 5 * * *"
+  push:
+    branches: ["main"]
+    paths:
+      - ".github/renovate.json5"
+      - ".github/workflows/scheduled-renovate.yaml"
+
+permissions:
+  contents: read
+
+jobs:
+  renovate:
+    name: Renovate
+    uses: mmalyska/github-workflows/.github/workflows/run-renovate.yaml@main
+    with:
+      configurationFile: ".github/renovate.json5"
+      dryRun: ${{ inputs.dryRun || 'false' }}
+      renovateLogLevel: ${{ inputs.logLevel || 'debug' }}
+    secrets:
+      app_id: ${{ secrets.BOT_APP_ID }}
+      app_private_key: ${{ secrets.BOT_APP_PRIVATE_KEY }}

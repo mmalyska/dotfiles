@@ -59,7 +59,8 @@ Layer B uses throw-away homes below `~/.cache` (not `/tmp`: Codex refuses `CODEX
 ## 3. Pull request that changes the accepted revision
 
 Every merge to `main` in `mmalyska/claude-plugins` that changes a plugin gets an `ai-workflow-vX.Y.Z` tag. Renovate
-(`.github/renovate.json5`, a custom manager on `home/.chezmoidata/ai-workflow.yaml`) opens a pull request that moves
+(`.github/renovate.json5`, a custom manager on `home/.chezmoidata/ai-workflow.yaml`; run daily by
+`.github/workflows/scheduled-renovate.yaml`, which needs the secrets `BOT_APP_ID` and `BOT_APP_PRIVATE_KEY`) opens a pull request that moves
 `accepted_tag` and `accepted_sha` together, and never merges it by itself. **Merging that pull request is the acceptance**;
 nothing a workspace installs changes before. CI must be green. To look first, use the compare link in the description, or
 step 2 with the branch checked out.
