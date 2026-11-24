@@ -14,8 +14,10 @@
 {{- if hasKey . "ai_opencode" }}{{ $opencode = .ai_opencode }}{{ end -}}
 #!/usr/bin/env bash
 # ai-workflow-doctor: read-only report on the AI workflow installers (managed by chezmoi, do not edit in place).
-# Usage: ai-workflow-doctor [--strict]
-#   --strict  exit 1 on DRIFT, MISSING or an installer result of "partial" (skipped is never an error)
+# Usage: ai-workflow-doctor [--strict | --quiet | --hook]
+#   --strict  exit 1 on DRIFT, MISSING, a pending upgrade or an installer result of "partial" (skipped is never an error)
+#   --quiet   print nothing when all is well; otherwise one line per thing to do. Always exit 0. Meant for a shell prompt
+#   --hook    like --quiet, as the JSON a Claude Code SessionStart hook shows to the user and the model. Always exit 0
 # Reads the installer status files and asks the CLIs for their lists. It never writes, installs, adds or updates anything;
 # when an installer ended "partial" it only PRINTS the command that re-runs that single installer.
 # Needs ~/.local/bin on PATH.
@@ -27,6 +29,7 @@ USE_CLAUDE={{ $claude }}
 USE_CODEX={{ $codex }}
 USE_OPENCODE={{ $opencode }}
 ACCEPTED_SHA={{ $own.accepted_sha | quote }}
+SOURCE_DIR={{ .chezmoi.sourceDir | quote }}
 OWN_NAME={{ $own.name | quote }}
 OFFICIAL_NAME={{ $official.name | quote }}
 PLUGINS={{ join " " $plugins | quote }}
@@ -35,7 +38,14 @@ DEST_DIR={{ .chezmoi.destDir | quote }}
 
 STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/ai-workflow"
 STRICT=0
-[ "${1:-}" = "--strict" ] && STRICT=1
+MODE=report
+for arg in "$@"; do
+    case "$arg" in
+        --strict) STRICT=1;;
+        --quiet) MODE=quiet;;
+        --hook) MODE=hook;;
+    esac
+done
 BAD=0
 
 have() { command -v "$1" >/dev/null 2>&1; }
@@ -130,6 +140,94 @@ marketplace_codex() {
     if [ -z "$ref" ]; then echo ABSENT; elif [ "$ref" = "$ACCEPTED_SHA" ]; then echo OK; else echo DRIFT; fi
 }
 
+# ---- pending upgrades: what a merged pin or a newer plugin version still needs from the owner ----
+# pin_of <accepted_sha|accepted_tag>: reads the data file on stdin
+pin_of() { sed -n "s/^ *$1: *//p" | head -n 1; }
+
+# refresh_upstream: git fetch of the chezmoi source, at most once per FETCH_EVERY minutes, never longer than 4 s, silent on failure
+FETCH_EVERY=360
+refresh_upstream() {
+    local stamp="$STATE_DIR/source-fetch"
+    command -v timeout >/dev/null 2>&1 || return 0
+    git -C "$SOURCE_DIR" rev-parse --verify -q '@{upstream}' >/dev/null 2>&1 || return 0
+    if [ -e "$stamp" ] && [ -z "$(find "$stamp" -mmin +"$FETCH_EVERY" 2>/dev/null)" ]; then return 0; fi
+    mkdir -p "$STATE_DIR" 2>/dev/null && : > "$stamp"
+    GIT_TERMINAL_PROMPT=0 timeout 4 git -C "$SOURCE_DIR" fetch --quiet >/dev/null 2>&1 || true
+}
+
+# plugin_versions <json>: "<id> <version>" lines from `claude plugin list --json`
+plugin_versions() {
+    awk -F'"' '/"id":/ { id = $4 } /"version":/ && id != "" { print id, $4; id = "" }'
+}
+
+# pending_upgrades [upstream]: sets PENDING (one line per thing to do). With "upstream" it also compares the source to its remote.
+pending_upgrades() {
+    PENDING=""
+    local data="$SOURCE_DIR/.chezmoidata/ai-workflow.yaml" want up_sha up_tag behind
+    if [ "${1:-}" = upstream ] && git -C "$SOURCE_DIR" rev-parse --verify -q '@{upstream}' >/dev/null 2>&1; then
+        behind=$(git -C "$SOURCE_DIR" rev-list --count 'HEAD..@{upstream}' 2>/dev/null || echo 0)
+        if [ "${behind:-0}" -gt 0 ]; then
+            up_sha=$(git -C "$SOURCE_DIR" show '@{upstream}:./.chezmoidata/ai-workflow.yaml' 2>/dev/null | pin_of accepted_sha)
+            up_tag=$(git -C "$SOURCE_DIR" show '@{upstream}:./.chezmoidata/ai-workflow.yaml' 2>/dev/null | pin_of accepted_tag)
+            if [ -n "$up_sha" ] && [ "$up_sha" != "$ACCEPTED_SHA" ]; then
+                PENDING="${PENDING}A newer claude-plugins revision is accepted upstream (${up_tag:-$up_sha}): chezmoi git pull, read chezmoi diff, then AI_WORKFLOW_UPGRADE=1 chezmoi apply, then ai-workflow-doctor --strict
+"
+            fi
+        fi
+    fi
+    if [ -r "$data" ]; then
+        want=$(pin_of accepted_sha < "$data")
+        if [ -n "$want" ] && [ "$want" != "$ACCEPTED_SHA" ] && [ -z "$PENDING" ]; then
+            PENDING="${PENDING}The dotfiles source accepts claude-plugins ${want} but this host runs ${ACCEPTED_SHA}: AI_WORKFLOW_UPGRADE=1 chezmoi apply, then ai-workflow-doctor --strict
+"
+        fi
+    fi
+    if [ "$USE_CLAUDE" = true ] && have claude; then
+        local mp="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/plugins/marketplaces/$OWN_NAME" id ver have_ver stale=""
+        while read -r id ver; do
+            case "$id" in *@"$OWN_NAME") ;; *) continue;; esac
+            [ -r "$mp/plugins/${id%@*}/.claude-plugin/plugin.json" ] || continue
+            have_ver=$(sed -n 's/.*"version": *"\([^"]*\)".*/\1/p' "$mp/plugins/${id%@*}/.claude-plugin/plugin.json" | head -n 1)
+            if [ -n "$have_ver" ] && [ "$have_ver" != "$ver" ]; then stale="$stale ${id%@*} $ver->$have_ver,"; fi
+        done < <(claude plugin list --json 2>/dev/null | plugin_versions)
+        if [ -n "$stale" ]; then
+            PENDING="${PENDING}Installed plugins are behind the marketplace checkout:${stale%,}. Run claude plugin update <name>@$OWN_NAME for each, then start a new session
+"
+        fi
+    fi
+}
+
+json_escape() { sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' | awk 'BEGIN { ORS = "" } { if (NR > 1) print "\\n"; print }'; }
+
+# quiet_mode: --quiet and --hook. Prints nothing when all is well; always exits 0
+quiet_mode() {
+    local lines="" h mp
+    refresh_upstream
+    pending_upgrades upstream
+    lines=$PENDING
+    for h in claude codex; do
+        if [ "$h" = claude ]; then [ "$USE_CLAUDE" = true ] || continue; else [ "$USE_CODEX" = true ] || continue; fi
+        have "$h" || continue
+        if [ "$h" = claude ]; then mp=$(marketplace_claude); else mp=$(marketplace_codex); fi
+        [ "$mp" != DRIFT ] || lines="${lines}The $h marketplace $OWN_NAME is not at the accepted revision: AI_WORKFLOW_UPGRADE=1 chezmoi apply
+"
+        [ "$(status_field "$h" result)" != partial ] || lines="${lines}The $h installer ended partial: ai-workflow-doctor shows the commands that re-run it
+"
+    done
+    [ -n "$lines" ] || exit 0
+    lines=$(printf '%s' "$lines" | sed '/^$/d')
+    if [ "$MODE" = hook ]; then
+        local msg
+        msg=$(printf 'AI workflow: action needed\n%s' "$(printf '%s\n' "$lines" | sed 's/^/- /')" | json_escape)
+        printf '{"systemMessage":"%s","hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"%s"}}\n' "$msg" "$msg"
+    else
+        printf '%s\n' "$lines"
+    fi
+    exit 0
+}
+
+[ "$MODE" = report ] || quiet_mode
+
 echo "AI workflow doctor"
 echo "profile: $PROFILE   agent_teams: $AGENT_TEAMS"
 echo "accepted_sha: $ACCEPTED_SHA"
@@ -142,6 +240,13 @@ echo "[opencode] $(flag "$USE_OPENCODE")"
 if have opencode; then echo "  CLI: $(version opencode)"; else echo "  CLI: ABSENT"; fi
 if [ "$USE_OPENCODE" = true ]; then echo "  spike not implemented: nothing is installed or configured for OpenCode (docs/workflow/opencode-spike.md)"; fi
 echo
+pending_upgrades
+if [ -n "$PENDING" ]; then
+    echo "[pending]"
+    printf '%s' "$PENDING" | sed 's/^/  /'
+    echo
+    BAD=1
+fi
 if [ "$BAD" = 1 ]; then echo "result: PROBLEMS FOUND"; else echo "result: OK"; fi
 if [ "$STRICT" = 1 ] && [ "$BAD" = 1 ]; then exit 1; fi
 exit 0

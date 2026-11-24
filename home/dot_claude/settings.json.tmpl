@@ -32,6 +32,16 @@
         "hooks": [
           {
             "type": "command",
+            "command": "[ -x ~/.local/bin/ai-workflow-doctor ] && ~/.local/bin/ai-workflow-doctor --hook || true",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
             "command": "~/.claude/hooks/peon-ping/peon.sh",
             "timeout": 10
           }
