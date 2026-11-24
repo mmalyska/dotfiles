@@ -6,7 +6,7 @@ BeforeAll {
     $script:Root = (Resolve-Path (Join-Path $PSScriptRoot '../../..')).Path
     $script:Tmp = Join-Path ([System.IO.Path]::GetTempPath()) ('ai-pester-' + [guid]::NewGuid().ToString('N'))
     New-Item -ItemType Directory -Path $script:Tmp | Out-Null
-    $script:Sha = '4075ee1488b11214421dffc1ec8c9351193f6ff9'
+    $script:Sha = 'd17cc25f567caae3cc5eb7afbbc1c4da93e450f1'
     $script:Own = 'mmalyska-claude-plugins'
     $script:Official = 'claude-plugins-official'
     $script:OwnIds = 'personal-essentials', 'git-workflows', 'development-lifecycle', 'dotnet', 'frontend', 'backend', 'devops', 'security', 'agent-toolkit', 'renovate', 'devcontainer', 'android'
