@@ -44,7 +44,9 @@ if command -v shellcheck >/dev/null; then shellcheck -s bash "$D" || _fail "shel
 # the doctor never mutates: its only CLI calls are `plugin list`/--version, and it never runs chezmoi itself
 while IFS= read -r line; do
     case "$line" in *"plugin list --json"*) ;; *) _fail "(a) unexpected CLI call in doctor: $line";; esac
-done < <(grep -E '(claude|codex) (plugin|marketplace)' "$D" | grep -vE '^\s*#')
+done < <(grep -E '(claude|codex) (plugin|marketplace)' "$D" | grep -vE '^\s*#' | grep -vE '^\s*PENDING="\$\{PENDING\}')
+# the pending hints only PRINT an update command: no line runs one
+! grep -E '^\s*(claude|codex) (plugin|marketplace) (add|install|remove|uninstall|disable|update|upgrade)' "$D" >/dev/null || _fail "(a) doctor runs a mutating CLI call"
 ! grep -E '^[^#]*(\$\(|`|^\s*)chezmoi ' "$D" | grep -vE '^\s+chezmoi ' >/dev/null || _fail "(a) doctor runs chezmoi"
 
 # (a) managed name and mode, and the applied file
@@ -63,7 +65,7 @@ mkdir -p "$T/dest"
 HB="$T/home.b"; MKDIR="$HB/.claude/plugins/marketplaces/$OWN"
 git init -q "$MKDIR" && git -C "$MKDIR" -c user.email=a@b -c user.name=n commit -q --allow-empty -m x
 HEAD_SHA=$(git -C "$MKDIR" rev-parse HEAD)
-sed "s/^ACCEPTED_SHA=.*/ACCEPTED_SHA=\"$HEAD_SHA\"/" "$D" > "$T/doctor.b.sh"
+sed "s/^ACCEPTED_SHA=.*/ACCEPTED_SHA=\"$HEAD_SHA\"/; s#^SOURCE_DIR=.*#SOURCE_DIR=\"\"#" "$D" > "$T/doctor.b.sh"
 codex_cfg "$HB" "$HEAD_SHA"; status_file "$HB" claude ok 0; status_file "$HB" codex ok 0
 doctor "$T/doctor.b.sh" "$HB" STUB_STATE="$T/both-full.json" -- --strict
 assert_eq "(b) rc" "$RC" "0"
