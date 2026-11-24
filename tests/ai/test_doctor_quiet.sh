@@ -35,7 +35,9 @@ push_pin() { # <sha> <tag>: a new pin on origin, through the seed repository
 
 sed "s#^ACCEPTED_SHA=.*#ACCEPTED_SHA=\"$HEAD_SHA\"#; s#^SOURCE_DIR=.*#SOURCE_DIR=\"$T/src\"#" "$T/doctor.tpl.sh" > "$T/doctor.sh"
 bash -n "$T/doctor.sh" || _fail "bash -n"
-age_stamp() { python3 -I -c 'import os,sys,time; t=time.time()-7*3600; os.utime(sys.argv[1],(t,t))' "$H/.local/state/ai-workflow/source-fetch"; }
+age_stamp() { # [minutes, default 420]: make the fetch stamp that old
+    python3 -I -c 'import os,sys,time; t=time.time()-float(sys.argv[2])*60; os.utime(sys.argv[1],(t,t))' "$H/.local/state/ai-workflow/source-fetch" "${1:-420}"
+}
 run() { # <args...>: sets OUT and RC; STUB_STATE from $STATE
     OUT=$(env -u XDG_STATE_HOME -u CLAUDE_CONFIG_DIR -u CODEX_HOME HOME="$H" PATH="$STUBS:$BASE_PATH" STUB_STATE="$STATE" bash "$T/doctor.sh" "$@" 2>&1); RC=$?
 }
@@ -94,6 +96,13 @@ run --quiet; assert_not_contains "(5) throttled" "$OUT" "v9.9.10"
 age_stamp
 run --quiet; assert_contains "(5) refetched" "$OUT" "ai-workflow-v9.9.10"
 
+# (5b) the throttle is 30 minutes: a 20 minute old stamp still holds, a 40 minute old one fetches
+push_pin eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee ai-workflow-v9.9.11
+age_stamp 20
+run --quiet; assert_not_contains "(5b) 20 minutes: still throttled" "$OUT" "v9.9.11"
+age_stamp 40
+run --quiet; assert_contains "(5b) 40 minutes: fetched" "$OUT" "ai-workflow-v9.9.11"
+
 # (6) the full report never fetches or looks at the remote: with a fresh stamp removed, it makes no stamp
 rm -f "$H/.local/state/ai-workflow/source-fetch"
 run; [ ! -e "$H/.local/state/ai-workflow/source-fetch" ] || _fail "(6) the full report fetched"
@@ -101,7 +110,21 @@ run; [ ! -e "$H/.local/state/ai-workflow/source-fetch" ] || _fail "(6) the full 
 # (7) pulled: the upstream line is gone, the apply line replaces it
 git_in "$T/src" pull -q --ff-only
 run --quiet; assert_not_contains "(7) no upstream line" "$OUT" "accepted upstream"
-assert_contains "(7) apply line" "$OUT" "The dotfiles source accepts claude-plugins dddddddddddddddddddddddddddddddddddddddd"
+assert_contains "(7) apply line" "$OUT" "The dotfiles source accepts claude-plugins eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+
+# (7b) a Codex pin that differs gets the re-pin commands (the generic apply cannot fix it); Claude keeps the apply hint
+cp "$H/.codex/config.toml" "$T/codex-config.keep"
+printf '[marketplaces.%s]\nsource_type = "git"\nref = "0000000000000000000000000000000000000000"\n' "$OWN" > "$H/.codex/config.toml"
+run --quiet
+codex_line=$(printf '%s\n' "$OUT" | grep "^The codex marketplace" || true)
+assert_contains "(7b) codex: remove" "$codex_line" "codex plugin marketplace remove $OWN"
+assert_contains "(7b) codex: add at the accepted sha" "$codex_line" "codex plugin marketplace add mmalyska/claude-plugins --ref $HEAD_SHA"
+assert_contains "(7b) codex: per plugin" "$codex_line" "codex plugin add <name>@$OWN"
+assert_not_contains "(7b) codex: not the generic apply" "$codex_line" "AI_WORKFLOW_UPGRADE=1 chezmoi apply"
+run
+assert_contains "(7b) report lists the commands" "$OUT" "codex plugin marketplace add mmalyska/claude-plugins --ref $HEAD_SHA"
+cp "$T/codex-config.keep" "$H/.codex/config.toml"
+run --quiet; assert_not_contains "(7b) repinned: no codex line" "$OUT" "The codex marketplace"
 
 # (8) a source that is not a repository, or an unreachable remote: silent failure, exit 0, no noise
 sed "s#^SOURCE_DIR=.*#SOURCE_DIR=\"$T/not-a-repo\"#" "$T/doctor.sh" > "$T/doctor.norepo.sh"; mkdir -p "$T/not-a-repo"

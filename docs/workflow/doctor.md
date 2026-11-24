@@ -28,19 +28,22 @@ installed for it and it never affects `--strict` ([opencode-spike.md](opencode-s
 
 ## Pending upgrades and the session check
 
-After a pin pull request is merged, three things still need you, in this order. The doctor reports each one, in the full
+After a pin pull request is merged, up to four things still need you, in this order. The doctor reports each one, in the full
 report (section `[pending]`) and in `--quiet`/`--hook`:
 
 1. **Merged upstream, not pulled**: the source's remote has a newer `accepted_sha`. Run `chezmoi git pull`, read `chezmoi diff`.
 2. **Pulled, not applied**: the source's `accepted_sha` is not the one this host runs. Run `AI_WORKFLOW_UPGRADE=1 chezmoi apply`.
-3. **Plugins behind the marketplace checkout** (Claude): an installed plugin has an older version than the checkout. Run
+3. **Codex pin behind** (the installer only warns, it cannot edit a Codex pin in place): the doctor prints the commands
+   (`codex plugin marketplace remove`, `codex plugin marketplace add <repo> --ref <accepted_sha>`, then `codex plugin add` for each
+   plugin). Run them yourself; the full report and `--quiet` both show them.
+4. **Plugins behind the marketplace checkout** (Claude): an installed plugin has an older version than the checkout. Run
    `claude plugin update <name>@mmalyska-claude-plugins` for each, then start a new session.
 
 `~/.claude/settings.json` registers `ai-workflow-doctor --hook` as a Claude Code `SessionStart` hook, and `~/.codex/hooks.json`
 registers the same command as a Codex one (`startup|resume`), so a new session of either starts with that list (shown to you and
 given to the model) and with nothing at all when nothing is pending. Details:
 
-- Only the quiet modes look at the remote: one `git fetch` of the chezmoi source, at most every 6 hours (stamp
+- Only the quiet modes look at the remote: one `git fetch` of the chezmoi source, at most every 30 minutes (stamp
   `~/.local/state/ai-workflow/source-fetch`), at most 4 seconds, failures ignored. The full report never fetches.
 - A session cannot learn that plugins changed after it started: the hook runs at the start, when the installed plugins are
   already what the session loads. After updating plugins, start a new session.

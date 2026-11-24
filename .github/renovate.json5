@@ -9,12 +9,12 @@
       "description": "The accepted claude-plugins revision: tag and commit move together (docs/workflow/acceptance.md)",
       "managerFilePatterns": ["/^home/\\.chezmoidata/ai-workflow\\.yaml$/"],
       "matchStrings": [
-        "(?<indentation>[ \\t]+)accepted_sha: (?<currentDigest>[0-9a-f]{40})\\n(?<between>(?:[ \\t]*#[^\\n]*\\n)*)[ \\t]+accepted_tag: (?<currentValue>ai-workflow-v[0-9.]+)"
+        "(?<indentation>[ \\t]+)accepted_sha: (?<currentDigest>[0-9a-f]{40})\\n[ \\t]+accepted_tag: (?<currentValue>ai-workflow-v[0-9.]+)"
       ],
       "depNameTemplate": "mmalyska/claude-plugins",
       "datasourceTemplate": "github-tags",
       "versioningTemplate": "regex:^ai-workflow-v(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)$",
-      "autoReplaceStringTemplate": "{{{indentation}}}accepted_sha: {{#if newDigest}}{{{newDigest}}}{{else}}{{{currentDigest}}}{{/if}}\n{{{between}}}{{{indentation}}}accepted_tag: {{{newValue}}}"
+      "autoReplaceStringTemplate": "{{{indentation}}}accepted_sha: {{#if newDigest}}{{{newDigest}}}{{else}}{{{currentDigest}}}{{/if}}\n{{{indentation}}}accepted_tag: {{{newValue}}}"
     }
   ],
   "packageRules": [

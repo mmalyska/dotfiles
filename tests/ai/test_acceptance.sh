@@ -11,10 +11,10 @@ printf '%s\n' "$RECORD" | grep -q '^| Revision |' && _fail "acceptance.md repeat
 while IFS= read -r sha; do
     [[ $sha =~ ^[0-9a-f]{40}$ ]] || _fail "history row without a full sha: $sha"
 done < <(printf '%s\n' "$RECORD" | sed -n 's/^| [0-9-]* | `\([^`]*\)`.*/\1/p' | grep -v '^$')
-# the data file is what Renovate edits: both pin lines exist, each once, and are adjacent apart from comments
+# the data file is what Renovate edits: both pin lines exist, each once, and are adjacent
 DATA=$AI_ROOT/home/.chezmoidata/ai-workflow.yaml
 assert_eq "accepted_sha lines" "$(grep -c '^ *accepted_sha: [0-9a-f]\{40\}$' "$DATA")" "1"
 assert_eq "accepted_tag lines" "$(grep -c '^ *accepted_tag: ai-workflow-v[0-9.]*$' "$DATA")" "1"
-awk '/accepted_sha:/{f=1;next} f&&/accepted_tag:/{ok=1;exit} f&&!/^ *#/{exit} END{exit !ok}' "$DATA" \
-    || _fail "accepted_tag must follow accepted_sha with only comment lines between (the Renovate manager matches that shape)"
+awk '/accepted_sha:/{f=1;next} f{ok=/accepted_tag:/; exit} END{exit !(f && ok)}' "$DATA" \
+    || _fail "accepted_tag must be the line right after accepted_sha: Renovate rewrites exactly those two lines and would delete anything between them"
 :

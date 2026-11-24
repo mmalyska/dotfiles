@@ -31,6 +31,7 @@ USE_OPENCODE={{ $opencode }}
 ACCEPTED_SHA={{ $own.accepted_sha | quote }}
 SOURCE_DIR={{ .chezmoi.sourceDir | quote }}
 OWN_NAME={{ $own.name | quote }}
+OWN_REPO={{ $own.repo | quote }}
 OFFICIAL_NAME={{ $official.name | quote }}
 PLUGINS={{ join " " $plugins | quote }}
 EXTRAS={{ join " " $extras | quote }}
@@ -110,6 +111,10 @@ report() {
     if [ "$h" = claude ]; then mp=$(marketplace_claude); else mp=$(marketplace_codex); fi
     echo "  marketplace $OWN_NAME: $mp"
     [ "$mp" != DRIFT ] || BAD=1
+    if [ "$h" = codex ] && [ "$mp" = DRIFT ]; then
+        echo "  The Codex pin cannot be edited in place; run these yourself:"
+        codex_repin_commands | sed 's/^/    /'
+    fi
     if [ "$h" = claude ]; then
         installed=$(claude plugin list --json 2>/dev/null | ids id)
     else
@@ -124,6 +129,15 @@ report() {
     elif [ "$PLUGIN_STATE" = MISSING ] && [ "$result" != skipped ]; then
         recovery_hint "$h" "$script"
     fi
+}
+
+# codex_repin_commands: the commands that move the Codex marketplace pin (it cannot be edited in place); printed, never run
+codex_repin_commands() {
+    cat <<REPIN
+codex plugin marketplace remove $OWN_NAME
+codex plugin marketplace add $OWN_REPO --ref $ACCEPTED_SHA
+codex plugin add <name>@$OWN_NAME   (once for each plugin of the profile: $PLUGINS)
+REPIN
 }
 
 marketplace_claude() {
@@ -144,8 +158,8 @@ marketplace_codex() {
 # pin_of <accepted_sha|accepted_tag>: reads the data file on stdin
 pin_of() { sed -n "s/^ *$1: *//p" | head -n 1; }
 
-# refresh_upstream: git fetch of the chezmoi source, at most once per FETCH_EVERY minutes, never longer than 4 s, silent on failure
-FETCH_EVERY=360
+# refresh_upstream: git fetch of the chezmoi source, at most once per FETCH_EVERY (30) minutes, never longer than 4 s, silent on failure
+FETCH_EVERY=30
 refresh_upstream() {
     local stamp="$STATE_DIR/source-fetch" pid ticks=0
     git -C "$SOURCE_DIR" rev-parse --verify -q '@{upstream}' >/dev/null 2>&1 || return 0
@@ -213,8 +227,15 @@ quiet_mode() {
         if [ "$h" = claude ]; then [ "$USE_CLAUDE" = true ] || continue; else [ "$USE_CODEX" = true ] || continue; fi
         have "$h" || continue
         if [ "$h" = claude ]; then mp=$(marketplace_claude); else mp=$(marketplace_codex); fi
-        [ "$mp" != DRIFT ] || lines="${lines}The $h marketplace $OWN_NAME is not at the accepted revision: AI_WORKFLOW_UPGRADE=1 chezmoi apply
+        if [ "$mp" = DRIFT ]; then
+            if [ "$h" = codex ]; then
+                lines="${lines}The codex marketplace $OWN_NAME is not at the accepted revision. Its pin cannot be edited in place: codex plugin marketplace remove $OWN_NAME; codex plugin marketplace add $OWN_REPO --ref $ACCEPTED_SHA; then codex plugin add <name>@$OWN_NAME for each plugin (ai-workflow-doctor lists them)
 "
+            else
+                lines="${lines}The $h marketplace $OWN_NAME is not at the accepted revision: AI_WORKFLOW_UPGRADE=1 chezmoi apply
+"
+            fi
+        fi
         [ "$(status_field "$h" result)" != partial ] || lines="${lines}The $h installer ended partial: ai-workflow-doctor shows the commands that re-run it
 "
     done
