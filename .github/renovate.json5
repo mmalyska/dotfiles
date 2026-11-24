@@ -1,0 +1,34 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["github>mmalyska/renovate-config"],
+  "gitAuthor": "bendo-bot <126472327+bendo-bot[bot]@users.noreply.github.com>",
+  "reviewers": ["mmalyska"],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "The accepted claude-plugins revision: tag and commit move together (docs/workflow/acceptance.md)",
+      "fileMatch": ["^home/\\.chezmoidata/ai-workflow\\.yaml$"],
+      "matchStrings": [
+        "(?<indentation>[ \\t]+)accepted_sha: (?<currentDigest>[0-9a-f]{40})\\n(?<between>(?:[ \\t]*#[^\\n]*\\n)*)[ \\t]+accepted_tag: (?<currentValue>ai-workflow-v[0-9.]+)"
+      ],
+      "depNameTemplate": "mmalyska/claude-plugins",
+      "datasourceTemplate": "github-tags",
+      "versioningTemplate": "regex:^ai-workflow-v(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)$",
+      "autoReplaceStringTemplate": "{{{indentation}}}accepted_sha: {{#if newDigest}}{{{newDigest}}}{{else}}{{{currentDigest}}}{{/if}}\n{{{between}}}{{{indentation}}}accepted_tag: {{{newValue}}}"
+    }
+  ],
+  "packageRules": [
+    {
+      "description": "Accepting a plugin revision is a decision: never merge it automatically",
+      "matchDepNames": ["mmalyska/claude-plugins"],
+      "automerge": false,
+      "semanticCommitType": "chore",
+      "semanticCommitScope": "ai",
+      "commitMessageTopic": "accepted claude-plugins revision",
+      "prBodyNotes": [
+        "Merging this pull request accepts the revision: read what changed first (the compare link above).",
+        "After merge: `chezmoi git pull && chezmoi diff`, then `AI_WORKFLOW_UPGRADE=1 chezmoi apply`, `ai-workflow-doctor --strict`, and start a new session. See `docs/workflow/upgrade-runbook.md` (steps 1 and 4)."
+      ]
+    }
+  ]
+}

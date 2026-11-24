@@ -84,7 +84,8 @@ BASE_PATH=/usr/bin:/bin
 TIMEOUT=$(command -v timeout || command -v gtimeout || echo timeout)
 OWN=mmalyska-claude-plugins
 OFFICIAL=claude-plugins-official
-SHA=d17cc25f567caae3cc5eb7afbbc1c4da93e450f1
+# the accepted revision comes from the data file, so moving the pin never means editing tests
+SHA=$(sed -n 's/^ *accepted_sha: *//p' "$AI_ROOT/home/.chezmoidata/ai-workflow.yaml")
 CLAUDE_TPL=home/.chezmoiscripts/ai/run_onchange_after_100-claude-plugins.sh.tmpl
 # render_script <fixture> <path> -> file with the rendered installer
 render_script() {

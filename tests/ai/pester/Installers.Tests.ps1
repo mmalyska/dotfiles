@@ -6,7 +6,7 @@ BeforeAll {
     $script:Root = (Resolve-Path (Join-Path $PSScriptRoot '../../..')).Path
     $script:Tmp = Join-Path ([System.IO.Path]::GetTempPath()) ('ai-pester-' + [guid]::NewGuid().ToString('N'))
     New-Item -ItemType Directory -Path $script:Tmp | Out-Null
-    $script:Sha = 'd17cc25f567caae3cc5eb7afbbc1c4da93e450f1'
+    $script:Sha = (Select-String -LiteralPath (Join-Path $script:Root 'home/.chezmoidata/ai-workflow.yaml') -Pattern '^\s*accepted_sha:\s*([0-9a-f]{40})\s*$').Matches[0].Groups[1].Value
     $script:Own = 'mmalyska-claude-plugins'
     $script:Official = 'claude-plugins-official'
     $script:OwnIds = 'personal-essentials', 'git-workflows', 'development-lifecycle', 'dotnet', 'frontend', 'backend', 'devops', 'security', 'agent-toolkit', 'renovate', 'devcontainer', 'android'
