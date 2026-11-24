@@ -58,8 +58,16 @@ Layer B uses throw-away homes below `~/.cache` (not `/tmp`: Codex refuses `CODEX
 
 ## 3. Pull request that changes the accepted revision
 
-In one pull request: `accepted_sha` (and `accepted_tag` once a tag exists) in `home/.chezmoidata/ai-workflow.yaml`, and
-a new row in [acceptance.md](acceptance.md) (SHA, date, CLI versions, test results). CI must be green.
+Every merge to `main` in `mmalyska/claude-plugins` that changes a plugin gets an `ai-workflow-vX.Y.Z` tag. Renovate
+(`.github/renovate.json5`, a custom manager on `home/.chezmoidata/ai-workflow.yaml`) opens a pull request that moves
+`accepted_tag` and `accepted_sha` together, and never merges it by itself. **Merging that pull request is the acceptance**;
+nothing a workspace installs changes before. CI must be green. To look first, use the compare link in the description, or
+step 2 with the branch checked out.
+
+By hand, edit the two lines in `home/.chezmoidata/ai-workflow.yaml`: the SHA is the commit of the tag
+(`gh api repos/mmalyska/claude-plugins/commits/<tag> --jq .sha`). Nothing else holds the pin; the tests read it from there.
+Add a row to [acceptance.md](acceptance.md) only when you also ran the native tests (step 2).
+
 Both installers embed `accepted_sha` in their fingerprint, so the next `chezmoi apply` runs them again once.
 
 ## 4. Apply the upgrade

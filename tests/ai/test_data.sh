@@ -2,10 +2,11 @@
 # home/.chezmoidata/ai-workflow.yaml must load into templates and have the expected shape.
 . "$(dirname "$0")/lib.sh"
 
+want=$(sed -n 's/^ *accepted_sha: *//p' "$AI_ROOT/home/.chezmoidata/ai-workflow.yaml")
 for f in legacy-linux legacy-darwin legacy-windows legacy-devcontainer; do
     sha=$(chezmoi --source "$AI_ROOT" --config "$FIXTURES/$f.toml" execute-template \
         '{{ .ai_workflow.marketplace.own.accepted_sha }}') || _fail "$f: data not available in templates"
-    assert_eq "accepted_sha ($f)" "$sha" d17cc25f567caae3cc5eb7afbbc1c4da93e450f1
+    assert_eq "accepted_sha ($f)" "$sha" "$want"
 done
 
 data=$(chezmoi --source "$AI_ROOT" --config "$FIXTURES/legacy-linux.toml" data --format json) \
