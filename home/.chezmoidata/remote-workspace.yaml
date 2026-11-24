@@ -14,3 +14,4 @@ remote_workspace:
     - mmalyska/containers
     - mmalyska/claude-plugins
     - mmalyska/dotfiles
+    - mmalyska/talos-jetson-orin

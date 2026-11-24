@@ -1,0 +1,45 @@
+# Data for the generated /workspaces/AGENTS.md (docs/remote-workspace.md, "Workspace AGENTS.md").
+# Public data only: no tokens, no hostnames, no private repositories. Descriptions come from each repository's own README
+# or GitHub description; do not write a purpose that was not read from there.
+workspace_inventory:
+  # One entry per repository in remote_workspace.repositories, keyed by the repository name. Rendering fails, and
+  # tests/ai/test_workspace_agents.sh fails, when a cloned repository has no entry, so the list cannot drift.
+  cloned:
+    home-ops:
+      purpose: "Homelab GitOps: the Kubernetes cluster (Talos nodes, ArgoCD apps, Helm charts), Terraform, the docs site, and the Coder template and RBAC of this workspace."
+      instructions: "AGENTS.md (its Claude Code section has the Claude-specific notes); skills in .agents/skills; plans in .plans/ and TODO items in .plans/TODO.md."
+      notes: "Changes go through PRs. Merging deploys through ArgoCD, so a PR states its impact. The cluster is not changed with kubectl by hand."
+    containers:
+      purpose: "Builds and publishes container images to ghcr.io/mmalyska/*, including dev-workstation, the image of this pod. A fork of onedr0p/containers."
+      instructions: "AGENTS.md. The dev-workstation tests (apps/dev-workstation/ci/goss.yaml) pin what the image may contain: no sudo and no compiler."
+      notes: "Image changes need a PR here; a running workspace gets a new image only after a template update (owner consent)."
+    claude-plugins:
+      purpose: "Personal plugin marketplace for Claude Code and Codex: agents, commands, rules and skills. The git-workflows plugin supplies the worktree guard hook."
+      instructions: "No AGENTS.md or CLAUDE.md: see README.md. Hook tests: plugins/git-workflows/hooks/test-guard.sh; Python tests: tests/."
+      notes: "A plugin change reaches this workspace only after the plugin is updated to its new version."
+    dotfiles:
+      purpose: "chezmoi-managed dotfiles, including the global agent files (~/AGENTS.md, ~/.claude/CLAUDE.md, ~/.codex/AGENTS.md) and this file."
+      instructions: "No AGENTS.md or CLAUDE.md: see docs/remote-workspace.md. Tests: bash tests/ai/run.sh."
+      notes: "This repository is public: never put a secret, a private hostname or a private repository name in it."
+    talos-jetson-orin:
+      purpose: "Talos Linux on NVIDIA Jetson Orin with CUDA: builds the custom installer that nv1 (the GPU node) runs. origin is our fork; upstream is schwankner/talos-jetson-orin."
+      instructions: "No AGENTS.md or CLAUDE.md: see README.md and docs/jetpack7.md."
+      notes: "If the upstream remote is missing: git remote add upstream https://github.com/schwankner/talos-jetson-orin.git. Branch pr/jetpack7-r39 carries the JetPack 7 (r39) line; while it is the head of an open upstream PR, do not rewrite it without the owner. Workflows run in the fork (Build USB Image, jetpack=both)."
+  # Active repositories of the owner that are not cloned here (checked on GitHub on 2026-11-24). Clone one when a task
+  # needs it: gh repo clone mmalyska/<name> /workspaces/<name>. Refresh the list with:
+  #   gh repo list mmalyska --no-archived --limit 100
+  other:
+    - name: renovate-config
+      purpose: "Default Renovate configs shared by the repositories (they run with a private bot)."
+    - name: github-workflows
+      purpose: "Reusable GitHub workflows."
+    - name: helm-charts
+      purpose: "Helm charts, described on GitHub as specially refined charts."
+    - name: argocd-secret-replacer
+      purpose: "Argo CD config management plugin that replaces secret placeholders in manifests with values from sops or mounted Kubernetes Secrets."
+    - name: homelab-portal
+      purpose: "Cross-platform (iOS, Android, web) app that gathers homelab services behind one login (Keycloak SSO, Argo CD, Grafana)."
+    - name: vintagestory-mods-downloader
+      purpose: "Console app that downloads Vintage Story mods from a mods.json list."
+  # Forks of upstream projects (siderolabs talos, pkgs and extensions, argoproj argo-cd and others) also exist under the
+  # owner's account; home-ops does not reference them (checked 2026-11-24). Archived and private repositories are history.
