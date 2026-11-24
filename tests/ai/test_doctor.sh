@@ -41,12 +41,15 @@ D=$(render_doctor core-linux)
 bash -n "$D" || _fail "bash -n rendered doctor"
 ! grep -q '{{' "$D" || _fail "(a) template delimiters left in the rendered doctor"
 if command -v shellcheck >/dev/null; then shellcheck -s bash "$D" || _fail "shellcheck rendered doctor"; else echo "  NOT RUN shellcheck (not installed)"; fi
-# the doctor never mutates: its only CLI calls are `plugin list`/--version, and it never runs chezmoi itself
+# the doctor never mutates: its only CLI calls are `plugin list`/--version, and it never runs chezmoi itself.
+# Printed hint text is exempt, and only that: the REPIN heredoc body and the lines that assign a message (PENDING / lines).
+# The behavioural guarantee is the stub call log checked below (zero mutating calls in every scenario).
+code_only() { awk '/<<REPIN/ { skip = 1; next } /^REPIN$/ { skip = 0; next } !skip' "$D" | grep -vE '^\s*#' | grep -vE '^\s*(PENDING|lines)="\$\{(PENDING|lines)\}'; }
 while IFS= read -r line; do
     case "$line" in *"plugin list --json"*) ;; *) _fail "(a) unexpected CLI call in doctor: $line";; esac
-done < <(grep -E '(claude|codex) (plugin|marketplace)' "$D" | grep -vE '^\s*#' | grep -vE '^\s*PENDING="\$\{PENDING\}')
-# the pending hints only PRINT an update command: no line runs one
-! grep -E '^\s*(claude|codex) (plugin|marketplace) (add|install|remove|uninstall|disable|update|upgrade)' "$D" >/dev/null || _fail "(a) doctor runs a mutating CLI call"
+done < <(code_only | grep -E '(claude|codex) (plugin|marketplace)')
+# no line of code runs a mutating call
+! code_only | grep -E '(^|[^A-Za-z_-])(claude|codex) (plugin|marketplace) (add|install|remove|uninstall|disable|update|upgrade)' >/dev/null || _fail "(a) doctor runs a mutating CLI call"
 ! grep -E '^[^#]*(\$\(|`|^\s*)chezmoi ' "$D" | grep -vE '^\s+chezmoi ' >/dev/null || _fail "(a) doctor runs chezmoi"
 
 # (a) managed name and mode, and the applied file

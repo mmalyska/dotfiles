@@ -6,8 +6,9 @@ ai_workflow:
     own:
       name: mmalyska-claude-plugins
       repo: mmalyska/claude-plugins
-      # Accepted revision, see docs/workflow/acceptance.md. Codex pins it natively (--ref);
-      # Claude Code cannot pin a SHA, so it is verified (pin_mode: verify).
+      # Accepted revision (accepted_sha) and the tag it carries (accepted_tag), see docs/workflow/acceptance.md.
+      # Renovate moves both lines in one pull request: keep them adjacent, with nothing between them.
+      # Codex pins the SHA natively (--ref); Claude Code cannot pin a SHA, so it is verified (pin_mode: verify).
       accepted_sha: 69eaec0368fa19d35f43c36a6551541922717110
       accepted_tag: ai-workflow-v0.1.4
       pin_mode: verify

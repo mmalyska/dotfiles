@@ -65,7 +65,8 @@ Every merge to `main` in `mmalyska/claude-plugins` that changes a plugin gets an
 nothing a workspace installs changes before. CI must be green. To look first, use the compare link in the description, or
 step 2 with the branch checked out.
 
-By hand, edit the two lines in `home/.chezmoidata/ai-workflow.yaml`: the SHA is the commit of the tag
+By hand, edit the two lines in `home/.chezmoidata/ai-workflow.yaml` (they must stay adjacent, nothing between them: Renovate rewrites exactly those
+two lines, and `tests/ai/test_acceptance.sh` checks it): the SHA is the commit of the tag
 (`gh api repos/mmalyska/claude-plugins/commits/<tag> --jq .sha`). Nothing else holds the pin; the tests read it from there.
 Add a row to [acceptance.md](acceptance.md) only when you also ran the native tests (step 2).
 
