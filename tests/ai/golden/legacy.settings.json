@@ -25,6 +25,7 @@
     },
     "env": {
         "CLAUDE_AUTOCOMPACT_PCT_OVERRIDE": "70",
+        "CLAUDE_CODE_SUBAGENT_MODEL": "sonnet",
         "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1",
         "MAX_THINKING_TOKENS": "10000"
     },
@@ -186,7 +187,7 @@
         ]
     },
     "includeCoAuthoredBy": false,
-    "model": "opusplan",
+    "model": "opus",
     "permissions": {
         "allow": []
     },

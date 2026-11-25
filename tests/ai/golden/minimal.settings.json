@@ -11,6 +11,7 @@
     },
     "env": {
         "CLAUDE_AUTOCOMPACT_PCT_OVERRIDE": "70",
+        "CLAUDE_CODE_SUBAGENT_MODEL": "sonnet",
         "MAX_THINKING_TOKENS": "10000"
     },
     "extraKnownMarketplaces": {
@@ -165,7 +166,7 @@
         ]
     },
     "includeCoAuthoredBy": false,
-    "model": "opusplan",
+    "model": "opus",
     "permissions": {
         "allow": []
     },
