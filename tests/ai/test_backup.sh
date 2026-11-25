@@ -36,7 +36,8 @@ assert_eq "sources unchanged" "$(sums)" "$before"
 assert_calls "only list calls" "$LOG" '^(claude|codex) plugin list' 2
 assert_calls "no mutating calls" "$LOG" '(add|install|remove|uninstall|disable|update|marketplace)' 0
 [ -z "$(find "$D" -name '*.tmp')" ] || _fail "temp file left behind"
-[ "$(stat -c %a "$D" 2>/dev/null || stat -f %Lp "$D")" = 700 ] || _fail "backup dir is not private (0700)"
+# Only the permission bits: a setgid bit inherited from the parent (fsGroup volumes) gives 2700.
+mode=$(stat -c %a "$D" 2>/dev/null || stat -f %Lp "$D"); [ "${mode: -3}" = 700 ] || _fail "backup dir is not private (0700): $mode"
 
 # a second run never overwrites the first (same second or not)
 run_backup "$STUBS:$BASE_PATH" STUB_STATE="$T/state.json"
@@ -61,7 +62,7 @@ D=$(find "$H/.local/state/ai-workflow-backup" -mindepth 1 -maxdepth 1 -type d)
 
 # nothing to save: exit 1 and no empty directory
 H2="$T/home2"; mkdir -p "$H2"
-OUT=$(env -u XDG_STATE_HOME HOME="$H2" PATH="$BASE_PATH" bash "$BACKUP" 2>&1); RC=$?
+OUT=$(env -u XDG_STATE_HOME -u CLAUDE_CONFIG_DIR -u CODEX_HOME HOME="$H2" PATH="$BASE_PATH" bash "$BACKUP" 2>&1); RC=$?
 assert_eq "empty rc" "$RC" "1"
 [ -z "$(find "$H2/.local/state/ai-workflow-backup" -mindepth 1 -type d 2>/dev/null)" ] || _fail "empty backup dir left behind"
 assert_eq "sources unchanged at end" "$(sums)" "$before"
