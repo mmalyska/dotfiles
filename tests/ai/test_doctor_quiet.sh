@@ -128,7 +128,7 @@ run --quiet; assert_not_contains "(7b) repinned: no codex line" "$OUT" "The code
 
 # (8) a source that is not a repository, or an unreachable remote: silent failure, exit 0, no noise
 sed "s#^SOURCE_DIR=.*#SOURCE_DIR=\"$T/not-a-repo\"#" "$T/doctor.sh" > "$T/doctor.norepo.sh"; mkdir -p "$T/not-a-repo"
-OUT=$(env HOME="$H" PATH="$STUBS:$BASE_PATH" STUB_STATE="$STATE" bash "$T/doctor.norepo.sh" --quiet 2>&1); RC=$?
+OUT=$(env -u XDG_STATE_HOME -u CLAUDE_CONFIG_DIR -u CODEX_HOME HOME="$H" PATH="$STUBS:$BASE_PATH" STUB_STATE="$STATE" bash "$T/doctor.norepo.sh" --quiet 2>&1); RC=$?
 assert_eq "(8) no repo rc" "$RC" "0"; assert_eq "(8) no repo output" "$OUT" ""
 rm -rf "$T/origin.git"; : > "$H/.local/state/ai-workflow/source-fetch"
 age_stamp

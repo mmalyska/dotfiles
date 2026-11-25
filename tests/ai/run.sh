@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # Runs tests/ai/test_*.sh, each with a private throw-away HOME.
+# Variables that point a CLI at a config outside HOME are cleared, so a test cannot read the real one.
 # Native tests (tests/ai/e2e-*.sh) run only with AI_NATIVE_TESTS=1, otherwise NOT RUN.
 set -u
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
@@ -9,7 +10,8 @@ failed=0
 for t in "$ROOT"/tests/ai/test_*.sh; do
     name=$(basename "$t" .sh)
     tmp=$(mktemp -d)
-    if HOME="$tmp" AI_REAL_HOME="$REAL_HOME" bash "$t"; then
+    if env -u CODEX_HOME -u CLAUDE_CONFIG_DIR -u XDG_CONFIG_HOME -u XDG_DATA_HOME -u XDG_STATE_HOME -u XDG_CACHE_HOME \
+        HOME="$tmp" AI_REAL_HOME="$REAL_HOME" bash "$t"; then
         echo "PASS $name"
     else
         echo "FAIL $name"
