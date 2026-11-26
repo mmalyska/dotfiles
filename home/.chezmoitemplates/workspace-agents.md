@@ -67,9 +67,9 @@ This workspace is **read-only by design** (`home-ops`, `docs/src/k8s/dev-workspa
 
 ## Working conventions
 
-- Read the repository's own `AGENTS.md` (or `CLAUDE.md`, `README.md`) before exploring it from scratch.
+- **Read a repository's instructions before anything else in it.** Only a session started inside a repository loads its `AGENTS.md` or `CLAUDE.md`; a session started in `/workspaces` or in another repository does not. Before the first command that touches the repository, reads and greps included, read its `AGENTS.md` (or `CLAUDE.md`, else `README.md`) in full and follow it: for that repository it takes precedence over this file.
 - Do repository changes in a **linked worktree**, not in the primary checkout, in every repository: `git worktree add .worktrees/<type>/<slug> -b <type>/<slug> origin/main`. A hook (the `git-workflows` plugin) blocks edits in a primary checkout. Keep each primary checkout on its default branch, clean, updated with `git pull --ff-only`, and remove a worktree and its branch after the PR is merged.
 - The hook reads a command as text. If a command that only reads is denied while the shell is in a primary checkout, start it with `cd /tmp &&` or use absolute paths; creating a worktree and editing in it in one command can be denied too. The `git-workflows` plugin fixes both from version 1.3.12 on; check the installed version under `~/.claude/plugins`.
 - Never push to the default branch; change repositories through PRs. Commits and PRs carry no AI attribution lines. **Push and open PRs only when the owner asks.** An action that changes the cluster or an outside service needs the owner's consent for that action.
 - Don't modify cluster resources with `kubectl` directly if a repository manages them through GitOps; change the repository and let it reconcile.
-- Start sessions inside the relevant repository (or `/workspaces`) so this file and that repository's instructions are both loaded.
+- Start sessions inside the relevant repository, so this file and that repository's instructions are both loaded. A session started in `/workspaces` loads only this file and the global one, so the rule above applies.
